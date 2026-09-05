@@ -2,7 +2,7 @@ import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast,
 import { readFile } from "node:fs/promises";
 import { useEffect, useState } from "react";
 import { diffEnvVariables, isSecretKey, maskSecret, parseEnv } from "@env-butler/core";
-import { t } from "../i18n.js";
+import { snapshotLimitHint, t } from "../i18n.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
 
 interface SnapshotHistoryViewProps {
@@ -87,7 +87,11 @@ export function SnapshotHistoryView({
       });
 
       if (result.success) {
-        await showToast({ style: Toast.Style.Success, title: t("sh.restoredToast") });
+        await showToast({
+          style: Toast.Style.Success,
+          title: t("sh.restoredToast"),
+          message: snapshotLimitHint(result),
+        });
         onRestored();
         pop();
       } else {

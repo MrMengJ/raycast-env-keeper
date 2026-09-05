@@ -15,6 +15,8 @@ import {
   computeFingerprint,
   generateSnapshotFilename,
   parseSnapshotFilename,
+  checkSnapshotSoftLimit,
+  SNAPSHOT_SOFT_LIMIT,
 } from "@env-butler/core";
 
 const BASE_DIR = join(homedir(), ".env-butler");
@@ -271,6 +273,12 @@ export interface WriteEnvResult {
   success: boolean;
   conflict?: boolean;
   snapshotPath?: string;
+  /** 本次写入后,该项目累计的快照份数(原文件不存在、没打快照时为 undefined) */
+  snapshotCount?: number;
+  /** 快照份数是否已达软上限。达到后只提示,绝不自动清理(设计决议 Q12) */
+  snapshotLimitExceeded?: boolean;
+  /** 软上限值,交给界面组织提示文案,避免界面层再 import core 常量 */
+  snapshotLimit?: number;
   newFingerprint?: string;
   error?: string;
 }
@@ -300,6 +308,8 @@ export async function writeEnvFileWithSnapshot(options: {
 
   // 2. 自动生成快照备份（若原文件存在）
   let snapshotPath: string | undefined;
+  let snapshotCount: number | undefined;
+  let snapshotLimitExceeded = false;
   if (existsSync(envFilePath)) {
     const oldContent = await readFile(envFilePath, "utf8");
     const safeProjectName = projectName.replace(/[/\\?%*:|"<>]/g, "_");
@@ -311,6 +321,16 @@ export async function writeEnvFileWithSnapshot(options: {
     const snapshotFilename = generateSnapshotFilename(basename(envFilePath));
     snapshotPath = join(projectSnapshotDir, snapshotFilename);
     await writeFile(snapshotPath, oldContent, "utf8");
+
+    // 打完快照后数一下这个项目累计了多少份。超过软上限只是提示用户按需清理,
+    // 不自动删除——快照是安全网,自动清理与这个定位相冲突(设计决议 Q12)
+    try {
+      const entries = await readdir(projectSnapshotDir, { withFileTypes: true });
+      snapshotCount = entries.filter((e) => e.isFile() && parseSnapshotFilename(e.name) !== null).length;
+      snapshotLimitExceeded = checkSnapshotSoftLimit(snapshotCount).exceeded;
+    } catch {
+      // 数不出来不影响本次写入,静默跳过提示
+    }
   }
 
   // 3. 写入新文件内容
@@ -324,6 +344,9 @@ export async function writeEnvFileWithSnapshot(options: {
   return {
     success: true,
     snapshotPath,
+    snapshotCount,
+    snapshotLimitExceeded,
+    snapshotLimit: SNAPSHOT_SOFT_LIMIT,
     newFingerprint,
   };
 }

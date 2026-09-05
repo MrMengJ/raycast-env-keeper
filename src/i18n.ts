@@ -17,6 +17,7 @@ const zh = {
   "common.confirm": "确认",
   "common.saveFailedTitle": "保存失败",
   "common.searchPlaceholder": "搜索...",
+  "common.snapshotLimitMessage": "已存了 {count} 份快照（建议不超过 {limit} 份），可以在快照历史里清理一些旧的",
 
   // ---- manage-envs 主命令 ----
   "mv.searchPlaceholderProjects": "搜索已登记的项目...",
@@ -302,6 +303,8 @@ const en: Record<DictKey, string> = {
   "common.confirm": "Confirm",
   "common.saveFailedTitle": "Save Failed",
   "common.searchPlaceholder": "Search...",
+  "common.snapshotLimitMessage":
+    "{count} snapshots kept (we suggest staying under {limit}) — you can clear out old ones in Snapshot History",
 
   "mv.searchPlaceholderProjects": "Search registered projects...",
   "mv.trackTooltip": "Switch Track",
@@ -598,4 +601,20 @@ export function t(key: DictKey, vars?: Record<string, string | number>): string 
     }
   }
   return str;
+}
+
+/**
+ * 快照份数超过软上限时的提示语；没超过返回 undefined，调用方可以直接塞进 toast 的 message。
+ * 参数只声明结构上需要的三个字段，不 import 存储层的类型，避免界面文案层反过来依赖服务层。
+ */
+export function snapshotLimitHint(result: {
+  snapshotLimitExceeded?: boolean;
+  snapshotCount?: number;
+  snapshotLimit?: number;
+}): string | undefined {
+  if (!result.snapshotLimitExceeded) return undefined;
+  return t("common.snapshotLimitMessage", {
+    count: result.snapshotCount ?? 0,
+    limit: result.snapshotLimit ?? 0,
+  });
 }

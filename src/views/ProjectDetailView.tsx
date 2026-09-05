@@ -29,7 +29,7 @@ import {
   setEnvrcNoticeDismissed,
   toggleProjectSecret,
 } from "@env-butler/core";
-import { t } from "../i18n.js";
+import { snapshotLimitHint, t } from "../i18n.js";
 import {
   checkEnvrcExists,
   detectProjectEnvFiles,
@@ -136,6 +136,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
       await showToast({
         style: Toast.Style.Success,
         title: t("pd.savedToast"),
+        message: snapshotLimitHint(result),
       });
       return true;
     }
@@ -240,7 +241,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
     }
     const targetPath = join(currentProject.path, ".env");
     const currentContent = serializeEnv(lines);
-    await writeEnvFileWithSnapshot({
+    const result = await writeEnvFileWithSnapshot({
       projectName: currentProject.name,
       envFilePath: targetPath,
       newContent: currentContent,
@@ -250,6 +251,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
     await showToast({
       style: Toast.Style.Success,
       title: t("pd.copiedAsMainEnvToast", { file: selectedEnvFile }),
+      message: snapshotLimitHint(result),
     });
   };
 
