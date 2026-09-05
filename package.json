@@ -1,0 +1,74 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "env-butler",
+  "title": "Env Butler",
+  "description": "Manage all your projects' .env files and global shell config, right from Raycast. Local-only, keyboard-first, free.",
+  "icon": "extension-icon.png",
+  "author": "xiuman",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Developer Tools",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "manage-envs",
+      "title": "Manage Envs",
+      "subtitle": "Env Butler",
+      "description": "Open a project's .env file and manage its variables, environments, and snapshots.",
+      "mode": "view"
+    },
+    {
+      "name": "search-env-vars",
+      "title": "Search Env Vars",
+      "subtitle": "Env Butler",
+      "description": "Quickly search environment variables across all registered projects.",
+      "mode": "view"
+    }
+  ],
+  "tools": [],
+  "preferences": [
+    {
+      "name": "language",
+      "title": "Language / 界面语言",
+      "description": "Env Butler 界面显示语言 / Display language for Env Butler's interface",
+      "type": "dropdown",
+      "required": false,
+      "default": "zh",
+      "data": [
+        {
+          "title": "简体中文",
+          "value": "zh"
+        },
+        {
+          "title": "English",
+          "value": "en"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@env-butler/core": "file:../env-butler/core",
+    "@raycast/api": "^1.104.20",
+    "@raycast/utils": "^2.2.7"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.5",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}

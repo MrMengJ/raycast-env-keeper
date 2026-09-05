@@ -1,0 +1,79 @@
+import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { useState } from "react";
+import { isValidEnvFilename } from "@env-butler/core";
+import { t } from "../i18n.js";
+import { createEnvFile } from "../services/storage.js";
+
+interface CreateEnvFileFormProps {
+  projectPath: string;
+  onCreated: (filename: string) => void;
+}
+
+const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;
+
+export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormProps) {
+  const { pop } = useNavigation();
+  const [suffix, setSuffix] = useState("");
+  const [suffixError, setSuffixError] = useState<string | undefined>();
+
+  const filename = suffix.trim() ? `.env.${suffix.trim()}` : "";
+
+  const handleSubmit = async () => {
+    const trimmed = suffix.trim();
+    if (!trimmed) {
+      setSuffixError(t("cf.suffixEmptyError"));
+      return;
+    }
+    if (!SUFFIX_RE.test(trimmed)) {
+      setSuffixError(t("cf.suffixInvalidError"));
+      return;
+    }
+
+    const targetFilename = `.env.${trimmed}`;
+    if (!isValidEnvFilename(targetFilename)) {
+      setSuffixError(t("cf.suffixInvalidError"));
+      return;
+    }
+
+    try {
+      const result = await createEnvFile(projectPath, targetFilename);
+      if (!result.created) {
+        setSuffixError(t("cf.alreadyExistsError", { filename: targetFilename }));
+        return;
+      }
+      await showToast({ style: Toast.Style.Success, title: t("cf.successToast", { filename: targetFilename }) });
+      onCreated(targetFilename);
+      pop();
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("cf.failToast"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  return (
+    <Form
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm title={t("cf.submitTitle")} onSubmit={handleSubmit} />
+        </ActionPanel>
+      }
+    >
+      <Form.Description text={t("cf.description")} />
+      <Form.TextField
+        id="suffix"
+        title={t("cf.suffixTitle")}
+        placeholder={t("cf.suffixPlaceholder")}
+        value={suffix}
+        onChange={(val) => {
+          setSuffix(val);
+          setSuffixError(undefined);
+        }}
+        error={suffixError}
+      />
+      {filename && <Form.Description text={t("cf.previewFilename", { filename })} />}
+    </Form>
+  );
+}

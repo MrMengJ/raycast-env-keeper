@@ -1,0 +1,601 @@
+import { getPreferenceValues } from "@raycast/api";
+
+/**
+ * 极简 i18n(国际化,让界面按用户选择的语言显示不同文案)方案。
+ * 不依赖第三方库:一份 key -> 文案 的字典 + 一个 t() 取词函数,
+ * 用户在扩展偏好设置里选语言(package.json 的 preferences.language),
+ * t() 读取该偏好决定用哪份字典,{name} 形式的占位符用 vars 参数替换。
+ */
+
+export type Lang = "zh" | "en";
+
+const zh = {
+  // ---- 通用 ----
+  "common.save": "保存",
+  "common.cancel": "取消",
+  "common.delete": "删除",
+  "common.confirm": "确认",
+  "common.saveFailedTitle": "保存失败",
+  "common.searchPlaceholder": "搜索...",
+
+  // ---- manage-envs 主命令 ----
+  "mv.searchPlaceholderProjects": "搜索已登记的项目...",
+  "mv.trackTooltip": "切换轨道",
+  "mv.trackProjects": "项目轨 (Project Envs)",
+  "mv.trackShell": "Shell 轨 (Global Shell / Alias)",
+  "mv.sectionTitle": "已登记项目",
+  "mv.sectionSubtitle": "{count} 个项目",
+  "mv.envCountAccessory": "{count} 个环境文件",
+  "mv.lastOpenedAccessory": "访问于 {date}",
+  "mv.actionManage": "管理环境变量",
+  "mv.actionAddProject": "登记新项目",
+  "mv.actionOpenWith": "用其他应用打开",
+  "mv.actionRemove": "从注册表中移除",
+  "mv.removeConfirmTitle": "移除项目: {name}",
+  "mv.removeConfirmMessage": "这仅会从 Env Butler 注册表中移除该项目的登记记录，绝不会删除本地实际目录或 .env 文件。",
+  "mv.removeConfirmAction": "移除",
+  "mv.loadRegistryFailedTitle": "加载项目注册表失败",
+  "mv.removedToastTitle": "已移除项目: {name}",
+  "mv.emptyTitle": "暂无已登记项目",
+  "mv.emptyDesc": "点击回车或 ⌘N 添加你的第一个本地项目目录，开启环境变量安全管理。",
+
+  // ---- 添加项目表单 ----
+  "addProject.description": "选择本地项目根目录，Env Butler 将自动探测该目录下的 .env 文件并管理。",
+  "addProject.pathTitle": "项目目录",
+  "addProject.pathError": "请选择一个项目目录",
+  "addProject.nameTitle": "项目显示名称",
+  "addProject.namePlaceholder": "默认取文件夹名称",
+  "addProject.submitTitle": "添加项目",
+  "addProject.successToast": "已成功添加项目: {name}",
+  "addProject.failToast": "添加项目失败",
+
+  // ---- 项目详情页 ----
+  "pd.readFailedTitle": "读取环境文件失败",
+  "pd.secretOnToast": "已设为敏感字段",
+  "pd.secretOffToast": "已取消敏感字段",
+  "pd.conflictTitle": "检测到外部修改冲突",
+  "pd.conflictMessage":
+    "{file} 在你编辑期间被外部程序修改了。选择「放弃修改」会丢弃你刚才的改动、直接加载最新内容；选择「强制覆盖」会用你的改动覆盖外部的修改。",
+  "pd.conflictOverwrite": "强制覆盖",
+  "pd.conflictDiscardMine": "放弃修改",
+  "pd.savedToast": "已保存并生成历史快照",
+  "pd.exampleSuccessTitle": "已成功生成 .env.example",
+  "pd.exampleSuccessMessage": "保留全部键名与注释，清空敏感值占位",
+  "pd.alreadyMainEnvToast": "当前已经是 .env 文件",
+  "pd.copiedAsMainEnvToast": "已将 {file} 复制为 .env",
+  "pd.envrcTitle": "检测到项目中存在 .envrc (direnv)",
+  "pd.envrcSubtitle": "Env Butler 不会修改 .envrc，请确保 direnv 配置与 .env 协同生效",
+  "pd.envrcLearnMore": "了解详情",
+  "pd.envrcDismiss": "不再提示此项目",
+  "pd.envrcDismissedToast": "已关闭该项目的 .envrc 提示",
+  "pd.envrcDetailMarkdown": `# .envrc 是什么？
+
+**direnv** 是一个第三方 shell 工具（不是 Env Butler 的功能）。装了它之后，你 \`cd\` 进一个带 \`.envrc\` 文件的目录时，终端会自动加载这个文件里定义的环境变量；\`cd\` 离开时自动卸载。
+
+有些项目会在 \`.envrc\` 里写类似 \`dotenv .env.development\` 的命令，让 direnv 把某个 .env 文件的内容自动灌进你的终端；也有项目只是单纯 \`export\` 几个变量，跟 .env 文件完全无关。
+
+## 为什么 Env Butler 要提醒你
+
+Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际生效**的环境变量是由 direnv 决定的——两者可能不同步：改完 .env 存盘后，通常还需要在终端执行 \`direnv reload\`（或重新 \`cd\` 一次）才会让新内容真正生效。
+
+## Env Butler 会怎么做
+
+**绝不会**读取、解析或修改你的 .envrc 文件——具体逻辑完全由你和 direnv 掌控，这里只是提醒它的存在，避免你误以为"改完 .env 终端就自动同步了"。
+
+---
+
+不想再看到这条提示？用下方操作「不再提示此项目」即可关闭，只影响当前项目。`,
+  "pd.searchPlaceholder": "在 {file} 中搜索变量...",
+  "pd.switchEnvFileTooltip": "切换环境文件",
+  "pd.createEnvFileItem": "➕ 新建环境文件...",
+  "pd.sectionEnvrc": "环境提醒",
+  "pd.sectionEnabled": "已启用的变量",
+  "pd.sectionDisabled": "已禁用的变量 (注释行)",
+  "pd.sectionVariableActions": "变量操作",
+  "pd.sectionEnvAndSnapshot": "环境与快照",
+  "pd.countItems": "{count} 项",
+  "pd.actionHide": "隐藏明文打码",
+  "pd.actionReveal": "显示明文值",
+  "pd.actionCopyValue": "复制变量值",
+  "pd.actionCopyKey": "复制变量名 (KEY)",
+  "pd.actionEdit": "编辑变量",
+  "pd.actionNew": "新建变量",
+  "pd.actionToggleOff": "注释/禁用该变量",
+  "pd.actionToggleOn": "启用该变量",
+  "pd.actionSecretOff": "取消敏感标记",
+  "pd.actionSecretOn": "标记为敏感字段",
+  "pd.actionDelete": "删除变量",
+  "pd.actionSnapshotHistory": "查看快照历史",
+  "pd.actionGenerateExample": "生成/更新 .env.example",
+  "pd.actionCopyAsMainEnv": "复制当前环境为 .env",
+  "pd.lockTooltip": "敏感字段 (已打码)",
+  "pd.disabledTag": "已注释",
+  "pd.deleteConfirmTitle": "删除变量: {key}",
+  "pd.deleteConfirmMessage": "确定要从 {file} 中移除 {key} 吗？修改前将自动创建备份快照。",
+  "pd.emptyTitle": "该环境中暂无变量",
+  "pd.emptyDesc": "文件路径: {path}\n按下 ⌘N 新建第一个环境变量",
+
+  // ---- 变量编辑表单 ----
+  "ev.keyEmptyError": "变量名不能为空",
+  "ev.keyInvalidError": "变量名不合法，必须以字母或下划线开头，仅包含字母数字下划线",
+  "ev.keyTitle": "变量名 (KEY)",
+  "ev.keyPlaceholder": "例如: DATABASE_URL, PORT",
+  "ev.valueTitle": "变量值 (VALUE)",
+  "ev.valuePlaceholder": "变量值...",
+  "ev.quoteTitle": "包裹引号",
+  "ev.quoteNone": "无引号 (无特殊字符推荐)",
+  "ev.quoteDouble": '双引号 "..."',
+  "ev.quoteSingle": "单引号 '...'",
+  "ev.disabledLabel": "注释禁用此变量 (在 .env 中以前缀 # 存储)",
+  "ev.secretLabel": "标记为敏感字段 (在列表中自动脱敏打码)",
+  "ev.encryptedWarning":
+    "⚠️ 该值由 dotenvx 加密 (encrypted: 前缀)。直接在此修改会破坏加密数据，通常应改用 dotenvx 命令行工具重新加密，而不是手动改明文。",
+  "ev.encryptedOverrideLabel": "我了解风险，仍要用明文覆盖这个加密值",
+  "ev.encryptedBlockedError": "该变量是 dotenvx 加密值，请先勾选上方确认框再保存，或不要改动它",
+  "ev.submitEdit": "保存修改",
+  "ev.submitCreate": "创建变量",
+
+  // ---- 新建环境文件表单 ----
+  "cf.description": "在项目目录下新建一个空的环境文件，创建后会自动切换过去。",
+  "cf.suffixTitle": "环境名称",
+  "cf.suffixPlaceholder": "例如: development, staging, feature_x",
+  "cf.suffixEmptyError": "请输入环境名称",
+  "cf.suffixInvalidError": "环境名称只能包含字母、数字、下划线、短横线",
+  "cf.previewFilename": "将创建文件: {filename}",
+  "cf.alreadyExistsError": "{filename} 已存在，请换一个名称",
+  "cf.submitTitle": "新建环境文件",
+  "cf.successToast": "已创建 {filename}",
+  "cf.failToast": "创建环境文件失败",
+
+  // ---- Shell 轨 ----
+  "st.searchPlaceholder": "搜索 Shell 片段与 alias...",
+  "st.loadFailedTitle": "读取 Shell 配置失败",
+  "st.toggledToast": "已更新片段状态并重新生成 shell.sh",
+  "st.addedToast": "已添加片段并写入 shell.sh",
+  "st.updatedToast": "已更新片段并同步 shell.sh",
+  "st.deletedToast": "已删除片段",
+  "st.bootstrapSection": "Shell 集成",
+  "st.bootstrapReadyTitle": "✅ Shell 集成已启用",
+  "st.bootstrapReadySubtitle": "已在 {file} 检测到相关配置，新增/修改片段会自动同步",
+  "st.bootstrapPendingTitle": "还差一步：启用 Shell 集成",
+  "st.bootstrapUnknownTitle": "未识别到 zsh/bash，请手动把这一行添加到你的 shell 配置文件末尾：",
+  "st.bootstrapLearnMore": "了解详情",
+  "st.copySourceCommand": "复制这一行",
+  "st.actionEnableIntegration": "启用 Shell 集成（写入 {file}）",
+  "st.enableConfirmTitle": "启用 Shell 集成？",
+  "st.enableConfirmMessage":
+    "Env Butler 会在 {file} 末尾追加这一行：\n\n{sourceLine}\n\n不会修改你已有的任何内容，随时可以再次「禁用 Shell 集成」移除。确定现在写入吗？",
+  "st.enableConfirmAction": "写入",
+  "st.enabledIntegrationToast": "已启用 Shell 集成，开一个新终端窗口即可生效",
+  "st.enableFailedTitle": "启用失败",
+  "st.actionDisableIntegration": "禁用 Shell 集成（从 {file} 移除）",
+  "st.disableConfirmTitle": "禁用 Shell 集成？",
+  "st.disableConfirmMessage":
+    "会从 {file} 移除 Env Butler 写入的这一行：\n\n{sourceLine}\n\n之后新开的终端窗口就不会再加载你在 Shell 轨配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
+  "st.disableConfirmAction": "移除",
+  "st.disabledIntegrationToast": "已从 {file} 移除，Shell 集成已禁用",
+  "st.disableFailedTitle": "禁用失败",
+  "st.bootstrapDetailMarkdown": `# 为什么要做这一步？
+
+Env Butler 把你在 Shell 轨里添加、且处于"启用"状态的全局环境变量、alias、脚本片段，编译成了一个文件：
+
+\`\`\`
+{sourceLine}
+\`\`\`
+
+但这个文件不会自己生效——zsh/bash 只会在启动终端时读取你的配置文件（比如 \`~/.zshrc\`），不会主动去找 Env Butler 生成的文件。所以需要在配置文件末尾加上面这一行，告诉 shell "启动时也读一下这个文件"。
+
+## 怎么启用
+
+跟 Shell 轨里片段的"启用/停用"是同一套逻辑，两种方式都行：
+
+- **启用 Shell 集成**（推荐）：点这个操作，Env Butler 会帮你把这一行追加到 **{file}** 末尾，不会动你已有的任何内容。
+- **复制这一行**：如果你想自己动手，也可以复制后手动粘贴进 **{file}**。
+
+## 不想要了怎么办
+
+启用之后，这条提示会变成"✅ Shell 集成已启用"，操作里会多一个 **禁用 Shell 集成**——点一下就会把 Env Butler 加的那一行从 {file} 里干净移除，不影响你已有的其它配置，随时可以再启用回来。
+
+## 启用之后
+
+打开一个新的终端窗口（或执行 \`source {rcPath}\`），片段就会生效。之后你在 Shell 轨里增删改片段，Env Butler 都会自动重新生成这个文件，不需要重复启用这一步。
+
+## 怎么知道自己启用没启用
+
+Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到了，这条提示会自动变成"✅ Shell 集成已启用"，不会重复提醒你。`,
+  "st.actionNewSnippet": "新建 Shell 片段",
+  "st.sectionExports": "环境变量 (export)",
+  "st.sectionAliases": "命令别名 (alias)",
+  "st.sectionOthers": "通用脚本片段",
+  "st.emptyTitle": "暂无 Shell 片段",
+  "st.emptyDesc": "点击回车或 ⌘N 添加你的第一个全局环境变量、alias 或 Shell 片段",
+  "st.actionDisable": "停用该片段",
+  "st.actionEnable": "启用该片段",
+  "st.actionEdit": "编辑片段",
+  "st.actionNew": "新建片段",
+  "st.actionCopyContent": "复制片段代码",
+  "st.actionDelete": "删除片段",
+  "st.deleteConfirmTitle": "删除片段: {name}",
+  "st.deleteConfirmMessage": "确定要移除该片段吗？",
+  "st.enabledTag": "已生效",
+  "st.disabledTag": "已停用",
+  "st.detailHeading": "### 片段信息",
+  "st.detailType": "类型",
+  "st.detailStatus": "状态",
+  "st.detailDescription": "备注",
+  "st.detailNone": "（无）",
+
+  // ---- Shell 片段编辑表单 ----
+  "es.nameEmptyError": "片段名称不能为空",
+  "es.contentEmptyError": "片段内容不能为空",
+  "es.syntaxFailedTitle": "Shell 语法校验未通过 ({shell} -n)",
+  "es.nameTitle": "片段名称",
+  "es.namePlaceholder": "例如: JAVA_HOME 或 git-status-alias",
+  "es.typeTitle": "片段类型",
+  "es.typeExport": "环境变量 (export)",
+  "es.typeAlias": "命令别名 (alias)",
+  "es.typeSnippet": "脚本片段 (不限内容)",
+  "es.contentTitle": "Shell 代码内容",
+  "es.exportMismatchHint":
+    "⚠️ 内容不是以 export 开头，如果不是设置环境变量，建议改选「脚本片段」类型；这只是提醒，不影响保存。",
+  "es.aliasMismatchHint":
+    "⚠️ 内容不是以 alias 开头，如果不是定义命令别名，建议改选「脚本片段」类型；这只是提醒，不影响保存。",
+  "es.descTitle": "备注说明 (可选)",
+  "es.descPlaceholder": "简要描述此片段用途",
+  "es.enabledLabel": "启用此片段 (生成至 ~/.env-butler/shell.sh)",
+  "es.submitTitle": "保存片段",
+
+  // ---- 快照历史 ----
+  "sh.searchPlaceholder": "搜索历史快照...",
+  "sh.sectionTitle": "快照历史 - {file}",
+  "sh.sectionSubtitle": "{count} 份安全备份",
+  "sh.sizeAccessory": "{size} KB",
+  "sh.actionRestore": "回滚到此版本",
+  "sh.actionCopyContent": "复制快照内容",
+  "sh.actionDelete": "删除该快照",
+  "sh.restoreConfirmTitle": "回滚到快照: {timestamp}",
+  "sh.restoreConfirmMessage":
+    "确定要将 {file} 还原至该历史版本吗？当前文件将在还原前自动打一份新快照备份，确保绝不丢失数据。",
+  "sh.restoreConfirmAction": "立即回滚",
+  "sh.restoredToast": "快照已成功回滚",
+  "sh.restoreFailedTitle": "回滚失败",
+  "sh.restoreErrorTitle": "回滚异常",
+  "sh.deleteConfirmTitle": "删除快照",
+  "sh.deleteConfirmMessage": "确定要永久删除快照 {filename} 吗？",
+  "sh.deletedToast": "已删除快照",
+  "sh.unreadableContent": "(无法读取快照内容)",
+  "sh.emptyTitle": "暂无快照",
+  "sh.emptyDesc": "当您在 Env Butler 中首次修改并保存环境变量时，将自动为您保留历史快照。",
+  "sh.infoHeading": "快照信息",
+  "sh.infoTargetFile": "目标文件",
+  "sh.infoRecordedAt": "记录时间",
+  "sh.infoFileSize": "文件大小",
+  "sh.contentHeading": "快照内容",
+  "sh.contentEmpty": "（空文件）",
+  "sh.diffHeading": "与当前版本的差异",
+  "sh.diffNone": "与当前版本一致，无差异",
+  "sh.diffAdded": "🟢 新增",
+  "sh.diffRemoved": "🔴 删除 (快照中的值)",
+  "sh.diffChanged": "🟡 改动",
+
+  // ---- 全局搜索 ----
+  "search.placeholder": "全局跨项目搜索环境变量 KEY...",
+  "search.loadFailedTitle": "加载变量失败",
+  "search.sectionTitle": "匹配结果",
+  "search.sectionSubtitle": "{count} 个变量",
+  "search.actionGoto": "前往项目详情管理",
+  "search.actionHide": "隐藏明文",
+  "search.actionReveal": "显示明文",
+  "search.actionCopyValue": "复制变量值",
+  "search.actionCopyKey": "复制变量名 (KEY)",
+  "search.lockTooltip": "敏感字段",
+  "search.emptyTitle": "未搜索到匹配的变量",
+  "search.emptyDesc": "尝试搜索其他关键词，或在 Manage Envs 中登记新项目",
+} as const;
+
+type DictKey = keyof typeof zh;
+
+const en: Record<DictKey, string> = {
+  "common.save": "Save",
+  "common.cancel": "Cancel",
+  "common.delete": "Delete",
+  "common.confirm": "Confirm",
+  "common.saveFailedTitle": "Save Failed",
+  "common.searchPlaceholder": "Search...",
+
+  "mv.searchPlaceholderProjects": "Search registered projects...",
+  "mv.trackTooltip": "Switch Track",
+  "mv.trackProjects": "Project Track (Project Envs)",
+  "mv.trackShell": "Shell Track (Global Shell / Alias)",
+  "mv.sectionTitle": "Registered Projects",
+  "mv.sectionSubtitle": "{count} project(s)",
+  "mv.envCountAccessory": "{count} env file(s)",
+  "mv.lastOpenedAccessory": "Opened {date}",
+  "mv.actionManage": "Manage Environment Variables",
+  "mv.actionAddProject": "Register New Project",
+  "mv.actionOpenWith": "Open With...",
+  "mv.actionRemove": "Remove from Registry",
+  "mv.removeConfirmTitle": "Remove Project: {name}",
+  "mv.removeConfirmMessage":
+    "This only removes the registration entry from Env Butler. It will never delete the actual local directory or .env files.",
+  "mv.removeConfirmAction": "Remove",
+  "mv.loadRegistryFailedTitle": "Failed to Load Project Registry",
+  "mv.removedToastTitle": "Removed project: {name}",
+  "mv.emptyTitle": "No Registered Projects Yet",
+  "mv.emptyDesc": "Press Enter or ⌘N to add your first local project directory and start managing env vars safely.",
+
+  "addProject.description":
+    "Choose a local project root directory. Env Butler will automatically detect and manage the .env files inside it.",
+  "addProject.pathTitle": "Project Directory",
+  "addProject.pathError": "Please choose a project directory",
+  "addProject.nameTitle": "Display Name",
+  "addProject.namePlaceholder": "Defaults to the folder name",
+  "addProject.submitTitle": "Add Project",
+  "addProject.successToast": "Successfully added project: {name}",
+  "addProject.failToast": "Failed to Add Project",
+
+  "pd.readFailedTitle": "Failed to Read Env File",
+  "pd.secretOnToast": "Marked as sensitive field",
+  "pd.secretOffToast": "Unmarked as sensitive field",
+  "pd.conflictTitle": "External Modification Conflict Detected",
+  "pd.conflictMessage":
+    '{file} was modified by another program while you were editing. Choose "Discard Mine" to drop your changes and load the latest content; choose "Force Overwrite" to overwrite the external changes with yours.',
+  "pd.conflictOverwrite": "Force Overwrite",
+  "pd.conflictDiscardMine": "Discard Mine",
+  "pd.savedToast": "Saved and snapshot created",
+  "pd.exampleSuccessTitle": "Successfully generated .env.example",
+  "pd.exampleSuccessMessage": "All keys and comments kept, sensitive values cleared as placeholders",
+  "pd.alreadyMainEnvToast": "This is already the .env file",
+  "pd.copiedAsMainEnvToast": "Copied {file} as .env",
+  "pd.envrcTitle": "Detected .envrc (direnv) in this project",
+  "pd.envrcSubtitle": "Env Butler will not modify .envrc — please make sure your direnv setup works together with .env",
+  "pd.envrcLearnMore": "Learn More",
+  "pd.envrcDismiss": "Don't Show Again for This Project",
+  "pd.envrcDismissedToast": "Disabled the .envrc notice for this project",
+  "pd.envrcDetailMarkdown": `# What is .envrc?
+
+**direnv** is a third-party shell tool (not a feature of Env Butler). Once installed, it automatically loads the environment variables defined in \`.envrc\` when you \`cd\` into a directory that contains one, and unloads them when you leave.
+
+Some projects put a command like \`dotenv .env.development\` in \`.envrc\` so direnv pipes a specific .env file's content straight into your terminal; other projects just \`export\` a few variables with no relation to any .env file at all.
+
+## Why Env Butler flags this
+
+Env Butler edits the .env file on disk directly, but the environment variables **actually active in your terminal** are decided by direnv — the two can drift out of sync: after saving changes via Env Butler, you usually still need to run \`direnv reload\` (or \`cd\` back in) in your terminal for the new content to actually take effect.
+
+## What Env Butler does about it
+
+It will **never** read, parse, or modify your \`.envrc\` file — that logic stays entirely under your and direnv's control. This notice only exists so you're not surprised that editing .env here doesn't automatically sync to your shell.
+
+---
+
+Don't want to see this again? Use "Don't Show Again for This Project" below — it only affects the current project.`,
+  "pd.searchPlaceholder": "Search variables in {file}...",
+  "pd.switchEnvFileTooltip": "Switch Env File",
+  "pd.createEnvFileItem": "➕ Create New Env File...",
+  "pd.sectionEnvrc": "Environment Notice",
+  "pd.sectionEnabled": "Enabled Variables",
+  "pd.sectionDisabled": "Disabled Variables (Commented Out)",
+  "pd.sectionVariableActions": "Variable Actions",
+  "pd.sectionEnvAndSnapshot": "Environment & Snapshots",
+  "pd.countItems": "{count} item(s)",
+  "pd.actionHide": "Hide Plain Value",
+  "pd.actionReveal": "Show Plain Value",
+  "pd.actionCopyValue": "Copy Value",
+  "pd.actionCopyKey": "Copy Key",
+  "pd.actionEdit": "Edit Variable",
+  "pd.actionNew": "New Variable",
+  "pd.actionToggleOff": "Comment Out / Disable",
+  "pd.actionToggleOn": "Enable Variable",
+  "pd.actionSecretOff": "Unmark as Sensitive",
+  "pd.actionSecretOn": "Mark as Sensitive",
+  "pd.actionDelete": "Delete Variable",
+  "pd.actionSnapshotHistory": "View Snapshot History",
+  "pd.actionGenerateExample": "Generate/Update .env.example",
+  "pd.actionCopyAsMainEnv": "Copy Current Environment as .env",
+  "pd.lockTooltip": "Sensitive field (masked)",
+  "pd.disabledTag": "Commented",
+  "pd.deleteConfirmTitle": "Delete Variable: {key}",
+  "pd.deleteConfirmMessage":
+    "Are you sure you want to remove {key} from {file}? A backup snapshot will be created automatically before the change.",
+  "pd.emptyTitle": "No Variables in This Environment",
+  "pd.emptyDesc": "File path: {path}\nPress ⌘N to create your first variable",
+
+  "ev.keyEmptyError": "Variable name cannot be empty",
+  "ev.keyInvalidError": "Invalid variable name: must start with a letter or underscore, letters/digits/underscore only",
+  "ev.keyTitle": "Key",
+  "ev.keyPlaceholder": "e.g. DATABASE_URL, PORT",
+  "ev.valueTitle": "Value",
+  "ev.valuePlaceholder": "Variable value...",
+  "ev.quoteTitle": "Wrap With Quotes",
+  "ev.quoteNone": "No quotes (recommended without special chars)",
+  "ev.quoteDouble": 'Double quotes "..."',
+  "ev.quoteSingle": "Single quotes '...'",
+  "ev.disabledLabel": "Comment out this variable (stored as # prefix in .env)",
+  "ev.secretLabel": "Mark as sensitive (auto-masked in list view)",
+  "ev.encryptedWarning":
+    "⚠️ This value is encrypted by dotenvx (encrypted: prefix). Editing it here will break the encrypted data — normally you should re-encrypt via the dotenvx CLI instead of editing the plaintext.",
+  "ev.encryptedOverrideLabel": "I understand the risk, override with plaintext anyway",
+  "ev.encryptedBlockedError":
+    "This is a dotenvx-encrypted value — check the box above before saving, or leave it unchanged",
+  "ev.submitEdit": "Save Changes",
+  "ev.submitCreate": "Create Variable",
+
+  "cf.description": "Create a new empty environment file in the project directory; it will switch to it automatically.",
+  "cf.suffixTitle": "Environment Name",
+  "cf.suffixPlaceholder": "e.g. development, staging, feature_x",
+  "cf.suffixEmptyError": "Please enter an environment name",
+  "cf.suffixInvalidError": "Only letters, digits, underscore and hyphen are allowed",
+  "cf.previewFilename": "Will create file: {filename}",
+  "cf.alreadyExistsError": "{filename} already exists, please choose another name",
+  "cf.submitTitle": "Create Env File",
+  "cf.successToast": "Created {filename}",
+  "cf.failToast": "Failed to Create Env File",
+
+  "st.searchPlaceholder": "Search shell snippets & aliases...",
+  "st.loadFailedTitle": "Failed to Load Shell Config",
+  "st.toggledToast": "Snippet state updated and shell.sh regenerated",
+  "st.addedToast": "Snippet added and written to shell.sh",
+  "st.updatedToast": "Snippet updated and shell.sh synced",
+  "st.deletedToast": "Snippet deleted",
+  "st.bootstrapSection": "Shell Integration",
+  "st.bootstrapReadyTitle": "✅ Shell Integration Enabled",
+  "st.bootstrapReadySubtitle": "Found the matching config in {file} — new/edited snippets sync automatically",
+  "st.bootstrapPendingTitle": "One step left: enable Shell integration",
+  "st.bootstrapUnknownTitle":
+    "Couldn't detect zsh/bash — please manually add this line to the end of your shell config file:",
+  "st.bootstrapLearnMore": "Learn More",
+  "st.copySourceCommand": "Copy This Line",
+  "st.actionEnableIntegration": "Enable Shell Integration (Write to {file})",
+  "st.enableConfirmTitle": "Enable Shell integration?",
+  "st.enableConfirmMessage":
+    'Env Butler will append this line to the end of {file}:\n\n{sourceLine}\n\nIt won\'t touch anything you already have there, and you can always run "Disable Shell Integration" again to remove it. Write it now?',
+  "st.enableConfirmAction": "Write",
+  "st.enabledIntegrationToast": "Shell integration enabled — open a new terminal window for it to take effect",
+  "st.enableFailedTitle": "Enable Failed",
+  "st.actionDisableIntegration": "Disable Shell Integration (Remove from {file})",
+  "st.disableConfirmTitle": "Disable Shell integration?",
+  "st.disableConfirmMessage":
+    "This removes the line Env Butler wrote to {file}:\n\n{sourceLine}\n\nNew terminal windows will stop loading the variables/aliases/snippets from your Shell track (already-open windows are unaffected). Remove it?",
+  "st.disableConfirmAction": "Remove",
+  "st.disabledIntegrationToast": "Removed from {file} — Shell integration disabled",
+  "st.disableFailedTitle": "Disable Failed",
+  "st.bootstrapDetailMarkdown": `# Why is this step needed?
+
+Env Butler compiles the global environment variables, aliases, and snippets you've added (and enabled) in the Shell track into one file:
+
+\`\`\`
+{sourceLine}
+\`\`\`
+
+But this file doesn't take effect on its own — zsh/bash only read your config file (e.g. \`~/.zshrc\`) when a terminal starts; they won't look for the file Env Butler generates on their own. So one line needs to be added to the end of your config file telling your shell to "also read this file on startup".
+
+## How to enable it
+
+Same logic as enabling/disabling a snippet — either works:
+
+- **Enable Shell Integration** (recommended): Env Butler appends the line for you, without touching anything else already in **{file}**.
+- **Copy This Line**: copy it and paste it into **{file}** yourself if you'd rather do it by hand.
+
+## Changed your mind?
+
+Once enabled, this notice switches to "✅ Shell Integration Enabled" and a **Disable Shell Integration** action appears — it cleanly removes the line Env Butler added from {file}, without touching anything else, and you can re-enable it anytime.
+
+## After enabling it
+
+Open a new terminal window (or run \`source {rcPath}\`) and your snippets will take effect. From then on, whenever you add/edit/remove snippets in the Shell track, Env Butler regenerates this file automatically — no need to repeat this step.
+
+## How do I know if it's enabled?
+
+Every time you open this view, Env Butler checks whether {file} already contains this line — once it does, this notice automatically switches to "✅ Shell Integration Enabled" and won't nag you again.`,
+  "st.actionNewSnippet": "New Shell Snippet",
+  "st.sectionExports": "Environment Variables (export)",
+  "st.sectionAliases": "Aliases",
+  "st.sectionOthers": "General Snippets",
+  "st.emptyTitle": "No Shell Snippets Yet",
+  "st.emptyDesc": "Press Enter or ⌘N to add your first global env var, alias, or shell snippet",
+  "st.actionDisable": "Disable Snippet",
+  "st.actionEnable": "Enable Snippet",
+  "st.actionEdit": "Edit Snippet",
+  "st.actionNew": "New Snippet",
+  "st.actionCopyContent": "Copy Snippet Code",
+  "st.actionDelete": "Delete Snippet",
+  "st.deleteConfirmTitle": "Delete Snippet: {name}",
+  "st.deleteConfirmMessage": "Are you sure you want to remove this snippet?",
+  "st.enabledTag": "Active",
+  "st.disabledTag": "Disabled",
+  "st.detailHeading": "### Snippet Info",
+  "st.detailType": "Type",
+  "st.detailStatus": "Status",
+  "st.detailDescription": "Description",
+  "st.detailNone": "(none)",
+
+  "es.nameEmptyError": "Snippet name cannot be empty",
+  "es.contentEmptyError": "Snippet content cannot be empty",
+  "es.syntaxFailedTitle": "Shell Syntax Check Failed ({shell} -n)",
+  "es.nameTitle": "Snippet Name",
+  "es.namePlaceholder": "e.g. JAVA_HOME or git-status-alias",
+  "es.typeTitle": "Snippet Type",
+  "es.typeExport": "Env Variable (export)",
+  "es.typeAlias": "Alias (alias)",
+  "es.typeSnippet": "Snippet (no content restrictions)",
+  "es.contentTitle": "Shell Code",
+  "es.exportMismatchHint":
+    "⚠️ This doesn't start with export. If it's not setting an environment variable, consider switching to the \"Snippet\" type — just a hint, it won't block saving.",
+  "es.aliasMismatchHint":
+    "⚠️ This doesn't start with alias. If it's not defining a command alias, consider switching to the \"Snippet\" type — just a hint, it won't block saving.",
+  "es.descTitle": "Description (optional)",
+  "es.descPlaceholder": "Briefly describe what this snippet does",
+  "es.enabledLabel": "Enable this snippet (generated into ~/.env-butler/shell.sh)",
+  "es.submitTitle": "Save Snippet",
+
+  "sh.searchPlaceholder": "Search snapshot history...",
+  "sh.sectionTitle": "Snapshot History - {file}",
+  "sh.sectionSubtitle": "{count} backup(s)",
+  "sh.sizeAccessory": "{size} KB",
+  "sh.actionRestore": "Restore This Version",
+  "sh.actionCopyContent": "Copy Snapshot Content",
+  "sh.actionDelete": "Delete This Snapshot",
+  "sh.restoreConfirmTitle": "Restore Snapshot: {timestamp}",
+  "sh.restoreConfirmMessage":
+    "Are you sure you want to restore {file} to this historical version? The current file will be backed up automatically before restoring, so nothing is ever lost.",
+  "sh.restoreConfirmAction": "Restore Now",
+  "sh.restoredToast": "Snapshot restored successfully",
+  "sh.restoreFailedTitle": "Restore Failed",
+  "sh.restoreErrorTitle": "Restore Error",
+  "sh.deleteConfirmTitle": "Delete Snapshot",
+  "sh.deleteConfirmMessage": "Are you sure you want to permanently delete snapshot {filename}?",
+  "sh.deletedToast": "Snapshot deleted",
+  "sh.unreadableContent": "(Unable to read snapshot content)",
+  "sh.emptyTitle": "No Snapshots Yet",
+  "sh.emptyDesc":
+    "A snapshot is automatically kept the first time you edit and save environment variables in Env Butler.",
+  "sh.infoHeading": "Snapshot Info",
+  "sh.infoTargetFile": "Target File",
+  "sh.infoRecordedAt": "Recorded At",
+  "sh.infoFileSize": "File Size",
+  "sh.contentHeading": "Snapshot Content",
+  "sh.contentEmpty": "(empty file)",
+  "sh.diffHeading": "Diff vs. Current Version",
+  "sh.diffNone": "Identical to the current version — no differences",
+  "sh.diffAdded": "🟢 Added",
+  "sh.diffRemoved": "🔴 Removed (value in snapshot)",
+  "sh.diffChanged": "🟡 Changed",
+
+  "search.placeholder": "Search env variable KEY across all projects...",
+  "search.loadFailedTitle": "Failed to Load Variables",
+  "search.sectionTitle": "Matches",
+  "search.sectionSubtitle": "{count} variable(s)",
+  "search.actionGoto": "Go to Project Details",
+  "search.actionHide": "Hide Plain Value",
+  "search.actionReveal": "Show Plain Value",
+  "search.actionCopyValue": "Copy Value",
+  "search.actionCopyKey": "Copy Key",
+  "search.lockTooltip": "Sensitive field",
+  "search.emptyTitle": "No Matching Variables",
+  "search.emptyDesc": "Try a different keyword, or register a new project in Manage Envs",
+};
+
+const dicts: Record<Lang, Record<DictKey, string>> = { zh, en };
+
+export function getLang(): Lang {
+  try {
+    const prefs = getPreferenceValues<{ language?: string }>();
+    return prefs.language === "en" ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
+}
+
+/**
+ * 取词函数。vars 里的 {key} 占位符会被替换成对应的值。
+ */
+export function t(key: DictKey, vars?: Record<string, string | number>): string {
+  const lang = getLang();
+  let str = dicts[lang][key] ?? dicts.zh[key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      str = str.split(`{${k}}`).join(String(v));
+    }
+  }
+  return str;
+}
