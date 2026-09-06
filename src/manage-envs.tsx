@@ -11,11 +11,13 @@ import {
   showToast,
   Toast,
 } from "@raycast/api";
+import { existsSync } from "node:fs";
 import { useEffect, useState } from "react";
 import { type ProjectMeta, removeProject, sortProjectsByRecent, touchProject } from "@env-butler/core";
 import { t } from "./i18n.js";
 import { type ConfigLoadProblem, detectProjectEnvFiles, loadRegistry, saveRegistry } from "./services/storage.js";
 import { ConfigProblemItem } from "./views/ConfigProblemItem.js";
+import { RelocateProjectForm } from "./views/RelocateProjectForm.js";
 import { AddProjectForm } from "./views/AddProjectForm.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
@@ -31,6 +33,7 @@ export default function Command() {
   const [loading, setLoading] = useState(true);
   const [envCounts, setEnvCounts] = useState<Record<string, number>>({});
   const [configProblem, setConfigProblem] = useState<ConfigLoadProblem | undefined>();
+  const [missingPaths, setMissingPaths] = useState<Record<string, boolean>>({});
 
   // 启动时读取上次打开的轨道
   useEffect(() => {
@@ -55,15 +58,19 @@ export default function Command() {
       const sorted = sortProjectsByRecent(reg);
       setProjects(sorted);
 
-      // 探测每个项目下的环境文件数
+      // 探测每个项目下的环境文件数,顺便记下哪些项目的目录已经不在了
+      // (目录被改名或搬走时,继续显示成正常项目会让人点进去才发现打不开)
       const counts: Record<string, number> = {};
+      const missing: Record<string, boolean> = {};
       await Promise.all(
         sorted.map(async (p) => {
+          missing[p.id] = !existsSync(p.path);
           const files = await detectProjectEnvFiles(p.path);
           counts[p.id] = files.length;
         }),
       );
       setEnvCounts(counts);
+      setMissingPaths(missing);
     } catch (e) {
       await showToast({
         style: Toast.Style.Failure,
@@ -142,25 +149,43 @@ export default function Command() {
         {projects.map((p) => {
           const envCount = envCounts[p.id] ?? 1;
           const dateStr = new Date(p.lastOpenedAt).toLocaleDateString();
+          const isMissing = missingPaths[p.id] === true;
 
           return (
             <List.Item
               key={p.id}
-              icon={{ source: Icon.Folder, tintColor: Color.Blue }}
+              icon={
+                isMissing
+                  ? { source: Icon.QuestionMarkCircle, tintColor: Color.SecondaryText }
+                  : { source: Icon.Folder, tintColor: Color.Blue }
+              }
               title={p.name}
               subtitle={p.path}
-              accessories={[
-                { text: t("mv.envCountAccessory", { count: envCount }) },
-                { text: t("mv.lastOpenedAccessory", { date: dateStr }) },
-              ]}
+              accessories={
+                isMissing
+                  ? [{ tag: { value: t("mv.missingTag"), color: Color.Orange }, tooltip: t("mv.missingTooltip") }]
+                  : [
+                      { text: t("mv.envCountAccessory", { count: envCount }) },
+                      { text: t("mv.lastOpenedAccessory", { date: dateStr }) },
+                    ]
+              }
               actions={
                 <ActionPanel>
-                  <Action.Push
-                    title={t("mv.actionManage")}
-                    icon={Icon.Gear}
-                    target={<ProjectDetailView project={p} onProjectUpdated={() => refreshProjects()} />}
-                    onPush={() => handleOpenProject(p)}
-                  />
+                  {/* 目录已经不在时,首要动作换成"重新指过去",而不是让人点进一个打不开的项目 */}
+                  {isMissing ? (
+                    <Action.Push
+                      title={t("mv.actionRelocate")}
+                      icon={Icon.ArrowRight}
+                      target={<RelocateProjectForm project={p} onDone={() => refreshProjects()} />}
+                    />
+                  ) : (
+                    <Action.Push
+                      title={t("mv.actionManage")}
+                      icon={Icon.Gear}
+                      target={<ProjectDetailView project={p} onProjectUpdated={() => refreshProjects()} />}
+                      onPush={() => handleOpenProject(p)}
+                    />
+                  )}
                   <Action.Push
                     title={t("mv.actionAddProject")}
                     icon={Icon.Plus}

@@ -543,14 +543,17 @@ export async function checkEnvrcExists(projectPath: string): Promise<boolean> {
  */
 export async function readEnvFile(
   filePath: string,
+  options: { withFingerprint?: boolean } = {},
 ): Promise<{ content: string; fingerprint: string; exists: boolean }> {
+  // 指纹是给保存时的冲突检测用的;全局搜索只是读内容,没必要给每个文件都算一遍哈希
+  const { withFingerprint = true } = options;
   if (!existsSync(filePath)) {
-    return { content: "", fingerprint: computeFingerprint(""), exists: false };
+    return { content: "", fingerprint: withFingerprint ? computeFingerprint("") : "", exists: false };
   }
   const content = await readFile(filePath, "utf8");
   return {
     content,
-    fingerprint: computeFingerprint(content),
+    fingerprint: withFingerprint ? computeFingerprint(content) : "",
     exists: true,
   };
 }
