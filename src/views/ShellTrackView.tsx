@@ -16,6 +16,7 @@ import {
   type ShellConfig,
   type ShellSnippet,
   addShellSnippet,
+  moveShellSnippet,
   removeShellSnippet,
   toggleShellSnippet,
   updateShellSnippet,
@@ -27,6 +28,7 @@ import {
   detectShellRc,
   getShellScriptPath,
   loadShellConfig,
+  readShellScript,
   removeShellSourceLine,
   saveShellConfig,
   type ShellRcInfo,
@@ -140,6 +142,20 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
     await showToast({ style: Toast.Style.Success, title: t("st.updatedToast") });
   };
 
+  // 调整片段在 shell.sh 里的先后。列表是按类型分组显示的,分组顺序跟文件里的真实顺序对不上,
+  // 所以移动后用 toast 报一下新位置,再配合"查看生成的 shell.sh"让用户能核对
+  const handleMove = async (id: string, direction: "up" | "down") => {
+    const updated = moveShellSnippet(config, id, direction);
+    if (updated === config) return; // 已经在最前/最后,moveShellSnippet 原样返回
+    await saveShellConfig(updated);
+    setConfig(updated);
+    const index = updated.snippets.findIndex((s) => s.id === id) + 1;
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.movedToast", { index, total: updated.snippets.length }),
+    });
+  };
+
   const handleDelete = async (item: ShellSnippet) => {
     const confirmed = await confirmAlert({
       title: t("st.deleteConfirmTitle", { name: item.name }),
@@ -168,6 +184,22 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
   const exports = config.snippets.filter((s) => s.type === "export");
   const aliases = config.snippets.filter((s) => s.type === "alias");
   const others = config.snippets.filter((s) => s.type === "snippet");
+
+  // 三个分组渲染的是同一种条目,props 也完全一样,抽出来避免抄三遍
+  const renderSnippet = (item: ShellSnippet) => (
+    <SnippetListItem
+      key={item.id}
+      item={item}
+      orderIndex={config.snippets.findIndex((s) => s.id === item.id) + 1}
+      orderTotal={config.snippets.length}
+      shellKind={shellKind}
+      onToggle={handleToggle}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      onAdd={handleAdd}
+      onMove={handleMove}
+    />
+  );
 
   // 首次引导条:探测到已经 source 过就显示"已就绪",没探测到 shell 类型(如 fish)就给保守的手动提示
   const bootstrapTitle = !rcInfo
@@ -228,6 +260,7 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
                   />
                 )}
                 <Action.CopyToClipboard title={t("st.copySourceCommand")} content={sourceLine} />
+                <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
                 {!isShowingDetail && (
                   <Action.Push
                     title={t("st.bootstrapLearnMore")}
@@ -258,49 +291,19 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
 
       {exports.length > 0 && (
         <List.Section title={t("st.sectionExports")} subtitle={t("pd.countItems", { count: exports.length })}>
-          {exports.map((item) => (
-            <SnippetListItem
-              key={item.id}
-              item={item}
-              shellKind={shellKind}
-              onToggle={handleToggle}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-            />
-          ))}
+          {exports.map(renderSnippet)}
         </List.Section>
       )}
 
       {aliases.length > 0 && (
         <List.Section title={t("st.sectionAliases")} subtitle={t("pd.countItems", { count: aliases.length })}>
-          {aliases.map((item) => (
-            <SnippetListItem
-              key={item.id}
-              item={item}
-              shellKind={shellKind}
-              onToggle={handleToggle}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-            />
-          ))}
+          {aliases.map(renderSnippet)}
         </List.Section>
       )}
 
       {others.length > 0 && (
         <List.Section title={t("st.sectionOthers")} subtitle={t("pd.countItems", { count: others.length })}>
-          {others.map((item) => (
-            <SnippetListItem
-              key={item.id}
-              item={item}
-              shellKind={shellKind}
-              onToggle={handleToggle}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-            />
-          ))}
+          {others.map(renderSnippet)}
         </List.Section>
       )}
 
@@ -330,14 +333,58 @@ function snippetTypeLabel(type: ShellSnippet["type"]): string {
   return t("es.typeSnippet");
 }
 
-// 详情面板内容:元信息(类型/状态/备注) + 完整代码,不用再进编辑表单才能看全
-function buildSnippetDetailMarkdown(item: ShellSnippet): string {
+// 生成文件的预览页:列表按类型分组,看不出真实先后,这里把 shell.sh 原样摊开
+function ShellScriptPreview() {
+  const [content, setContent] = useState<string | null>(null);
+  const scriptPath = getShellScriptPath();
+
+  useEffect(() => {
+    readShellScript().then(setContent);
+  }, []);
+
+  let markdown = "";
+  if (content !== null) {
+    markdown =
+      content.trim() === ""
+        ? t("st.previewEmpty")
+        : [
+            t("st.previewIntro"),
+            "",
+            `**${t("st.previewPathLabel")}**: \`${scriptPath}\``,
+            "",
+            "---",
+            "",
+            "```bash",
+            content,
+            "```",
+          ].join("\n");
+  }
+
+  return (
+    <Detail
+      isLoading={content === null}
+      navigationTitle={t("st.previewTitle")}
+      markdown={markdown}
+      actions={
+        content ? (
+          <ActionPanel>
+            <Action.CopyToClipboard title={t("st.previewCopy")} content={content} />
+          </ActionPanel>
+        ) : undefined
+      }
+    />
+  );
+}
+
+// 详情面板内容:元信息(类型/状态/排列顺序/备注) + 完整代码,不用再进编辑表单才能看全
+function buildSnippetDetailMarkdown(item: ShellSnippet, orderIndex: number, orderTotal: number): string {
   const statusLabel = item.enabled ? t("st.enabledTag") : t("st.disabledTag");
   const descriptionLabel = item.description || t("st.detailNone");
 
   return `${t("st.detailHeading")}
 - **${t("st.detailType")}**: ${snippetTypeLabel(item.type)}
 - **${t("st.detailStatus")}**: ${statusLabel}
+- **${t("st.detailOrder")}**: ${t("st.detailOrderValue", { index: orderIndex, total: orderTotal })}
 - **${t("st.detailDescription")}**: ${descriptionLabel}
 
 ---
@@ -349,24 +396,31 @@ ${item.content}
 
 function SnippetListItem({
   item,
+  orderIndex,
+  orderTotal,
   shellKind,
   onToggle,
   onEdit,
   onDelete,
   onAdd,
+  onMove,
 }: {
   item: ShellSnippet;
+  /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
+  orderIndex: number;
+  orderTotal: number;
   shellKind: ValidatableShell | undefined;
   onToggle: (id: string) => void;
   onEdit: (id: string, data: Omit<ShellSnippet, "id">) => Promise<void>;
   onDelete: (item: ShellSnippet) => void;
   onAdd: (data: Omit<ShellSnippet, "id">) => Promise<void>;
+  onMove: (id: string, direction: "up" | "down") => void;
 }) {
   return (
     <List.Item
       id={item.id}
       title={item.name}
-      detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item)} />}
+      detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal)} />}
       actions={
         <ActionPanel>
           <Action
@@ -388,6 +442,23 @@ function SnippetListItem({
             shortcut={Keyboard.Shortcut.Common.New}
             target={<EditShellSnippetForm shellKind={shellKind} onSave={onAdd} />}
           />
+          {orderIndex > 1 && (
+            <Action
+              title={t("st.actionMoveUp")}
+              icon={Icon.ArrowUp}
+              shortcut={Keyboard.Shortcut.Common.MoveUp}
+              onAction={() => onMove(item.id, "up")}
+            />
+          )}
+          {orderIndex < orderTotal && (
+            <Action
+              title={t("st.actionMoveDown")}
+              icon={Icon.ArrowDown}
+              shortcut={Keyboard.Shortcut.Common.MoveDown}
+              onAction={() => onMove(item.id, "down")}
+            />
+          )}
+          <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
           <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} />
           <Action
             title={t("st.actionDelete")}

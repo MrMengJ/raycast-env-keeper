@@ -11,6 +11,7 @@ import {
   showToast,
   Toast,
 } from "@raycast/api";
+import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { useEffect, useState } from "react";
@@ -240,6 +241,25 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
       return;
     }
     const targetPath = join(currentProject.path, ".env");
+
+    // 目标 .env 已存在时先问一声。虽然覆盖前会自动打快照、内容捞得回来,
+    // 但"按一下就把一整个文件换掉"不该在用户毫无察觉的情况下发生。
+    // 这里直接查磁盘而不是查 envFiles 状态:文件可能在界面打开期间被外部创建
+    if (existsSync(targetPath)) {
+      const confirmed = await confirmAlert({
+        title: t("pd.copyOverwriteConfirmTitle"),
+        message: t("pd.copyOverwriteConfirmMessage", { file: selectedEnvFile }),
+        primaryAction: {
+          title: t("pd.copyOverwriteConfirmAction"),
+          style: Alert.ActionStyle.Destructive,
+        },
+        dismissAction: {
+          title: t("common.cancel"),
+        },
+      });
+      if (!confirmed) return;
+    }
+
     const currentContent = serializeEnv(lines);
     const result = await writeEnvFileWithSnapshot({
       projectName: currentProject.name,

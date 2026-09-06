@@ -210,6 +210,19 @@ export async function saveShellConfig(config: ShellConfig): Promise<void> {
 }
 
 /**
+ * 读取已生成的 ~/.env-butler/shell.sh 原文,用于给用户预览"实际生成了什么、按什么顺序"。
+ * 界面上片段是按类型分组显示的,和文件里的真实先后并不一致,所以需要这个出口。
+ */
+export async function readShellScript(): Promise<string> {
+  if (!existsSync(SHELL_SCRIPT_FILE)) return "";
+  try {
+    return await readFile(SHELL_SCRIPT_FILE, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/**
  * 扫描项目根目录下的所有 .env* 文件
  */
 export async function detectProjectEnvFiles(projectPath: string): Promise<string[]> {
