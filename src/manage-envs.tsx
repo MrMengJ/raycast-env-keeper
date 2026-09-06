@@ -15,7 +15,13 @@ import { existsSync } from "node:fs";
 import { useEffect, useState } from "react";
 import { type ProjectMeta, removeProject, sortProjectsByRecent, touchProject } from "@env-butler/core";
 import { t } from "./i18n.js";
-import { type ConfigLoadProblem, detectProjectEnvFiles, loadRegistry, saveRegistry } from "./services/storage.js";
+import {
+  type ConfigLoadProblem,
+  detectProjectEnvFiles,
+  getBaseDir,
+  loadRegistry,
+  saveRegistry,
+} from "./services/storage.js";
 import { ConfigProblemItem } from "./views/ConfigProblemItem.js";
 import { RelocateProjectForm } from "./views/RelocateProjectForm.js";
 import { AddProjectForm } from "./views/AddProjectForm.js";
@@ -204,6 +210,8 @@ export default function Command() {
                     shortcut={{ modifiers: ["cmd"], key: "backspace" }}
                     onAction={() => handleRemoveProject(p)}
                   />
+                  {/* 设计决议说"换机 = 拷目录",但界面里从没告诉过用户目录在哪 */}
+                  <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
                 </ActionPanel>
               }
             />

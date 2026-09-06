@@ -10,6 +10,7 @@ import {
   List,
   showToast,
   Toast,
+  useNavigation,
 } from "@raycast/api";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -48,7 +49,17 @@ interface ProjectDetailViewProps {
   onProjectUpdated?: (project: ProjectMeta) => void;
 }
 
+/**
+ * 下拉框里"新建环境文件"那一项的哨兵值。
+ * Raycast 的 List.Dropdown 是"选中即触发",没有单独的按钮位,
+ * 所以只能放一个假选项:选中它时不更新当前值(受控值会自己弹回去),直接把表单推上来。
+ * 放在这里是因为"我要换个环境"和"我要建一个环境"本来就是同一个语境,
+ * 藏在 ⌘K 里太隐蔽了。
+ */
+const CREATE_ENV_FILE_VALUE = "__env_butler_create_env_file__";
+
 export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailViewProps) {
+  const { push } = useNavigation();
   const [currentProject, setCurrentProject] = useState<ProjectMeta>(project);
   const [envFiles, setEnvFiles] = useState<string[]>([]);
   const [selectedEnvFile, setSelectedEnvFile] = useState<string>(".env");
@@ -338,12 +349,35 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
         <List.Dropdown
           tooltip={t("pd.switchEnvFileTooltip")}
           value={selectedEnvFile}
-          onChange={setSelectedEnvFile}
+          onChange={(val) => {
+            if (val === CREATE_ENV_FILE_VALUE) {
+              push(
+                <CreateEnvFileForm
+                  projectPath={currentProject.path}
+                  onCreated={async (filename) => {
+                    await refreshEnvFiles();
+                    setSelectedEnvFile(filename);
+                  }}
+                />,
+              );
+              return;
+            }
+            setSelectedEnvFile(val);
+          }}
           placeholder={t("common.searchPlaceholder")}
         >
-          {envFiles.map((f) => (
-            <List.Dropdown.Item key={f} value={f} title={f} icon={Icon.Document} />
-          ))}
+          <List.Dropdown.Section>
+            {envFiles.map((f) => (
+              <List.Dropdown.Item key={f} value={f} title={f} icon={Icon.Document} />
+            ))}
+          </List.Dropdown.Section>
+          <List.Dropdown.Section>
+            <List.Dropdown.Item
+              value={CREATE_ENV_FILE_VALUE}
+              title={t("pd.createEnvFileItem")}
+              icon={Icon.NewDocument}
+            />
+          </List.Dropdown.Section>
         </List.Dropdown>
       }
     >
@@ -486,6 +520,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                     <Action.Push
                       title={t("pd.createEnvFileItem")}
                       icon={Icon.NewDocument}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
                       target={
                         <CreateEnvFileForm
                           projectPath={currentProject.path}
@@ -572,6 +607,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
               <Action.Push
                 title={t("pd.createEnvFileItem")}
                 icon={Icon.NewDocument}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
                 target={
                   <CreateEnvFileForm
                     projectPath={currentProject.path}

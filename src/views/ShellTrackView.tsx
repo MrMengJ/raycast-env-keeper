@@ -29,6 +29,7 @@ import {
   detectShellRc,
   getShellScriptPath,
   type ConfigLoadProblem,
+  getBaseDir,
   loadShellConfig,
   readShellScript,
   removeShellSourceLine,
@@ -297,6 +298,7 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
                   />
                 )}
                 <Action.CopyToClipboard title={t("st.copySourceCommand")} content={sourceLine} />
+                <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
                 <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
                 <Action.Push
                   title={t("st.actionConfigHistory")}

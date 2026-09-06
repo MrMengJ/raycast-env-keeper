@@ -17,6 +17,7 @@ const zh = {
   "common.confirm": "确认",
   "common.saveFailedTitle": "保存失败",
   "common.searchPlaceholder": "搜索...",
+  "common.showDataDir": "在访达中显示数据目录（换机拷这个目录即可）",
   "common.snapshotLimitMessage": "已存了 {count} 份快照（建议不超过 {limit} 份），可以在快照历史里清理一些旧的",
 
   // ---- 配置文件异常提示 ----
@@ -399,6 +400,7 @@ const en: Record<DictKey, string> = {
   "common.confirm": "Confirm",
   "common.saveFailedTitle": "Save Failed",
   "common.searchPlaceholder": "Search...",
+  "common.showDataDir": "Show Data Folder in Finder (copy it to move to a new machine)",
   "common.snapshotLimitMessage":
     "{count} snapshots kept (we suggest staying under {limit}) — you can clear out old ones in Snapshot History",
 
