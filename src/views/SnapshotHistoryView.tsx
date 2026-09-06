@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { diffEnvVariables, isSecretKey, maskSecret, parseEnv } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
+import { SnapshotCleanupForm } from "./SnapshotCleanupForm.js";
 
 interface SnapshotHistoryViewProps {
   projectName: string;
@@ -208,6 +209,13 @@ export function SnapshotHistoryView({
                   style={Action.Style.Destructive}
                   shortcut={{ modifiers: ["cmd"], key: "backspace" }}
                   onAction={() => handleDelete(item)}
+                />
+                <Action.Push
+                  title={t("sh.actionCleanup")}
+                  icon={Icon.DeleteDocument}
+                  target={
+                    <SnapshotCleanupForm envFilename={envFilename} snapshots={snapshots} onCleaned={refreshSnapshots} />
+                  }
                 />
               </ActionPanel>
             }

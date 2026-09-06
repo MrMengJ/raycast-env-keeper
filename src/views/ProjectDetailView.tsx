@@ -12,7 +12,7 @@ import {
   Toast,
 } from "@raycast/api";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
@@ -22,7 +22,7 @@ import {
   addEnvVariable,
   removeEnvVariable,
   toggleEnvVariable,
-  generateExampleEnv,
+  mergeExampleEnv,
   isSecretKey,
   isEncryptedValue,
   maskSecret,
@@ -224,14 +224,51 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
   };
 
   // 生成/更新 .env.example
+  // 不是整个重新生成,而是把当前 .env 的键合并进已有模板。
+  // .env.example 是提交进 git、给团队看的东西,上面经常有人手写补充说明,
+  // 整体重生成会把那些内容全冲掉;而且它此前不在快照体系里,冲掉了毫无退路
   const handleGenerateExample = async () => {
-    const exampleContent = generateExampleEnv(lines);
     const examplePath = join(currentProject.path, ".env.example");
-    await writeFile(examplePath, exampleContent, "utf8");
+    const exists = existsSync(examplePath);
+    const existingContent = exists ? await readFile(examplePath, "utf8") : "";
+    const merged = mergeExampleEnv(parseEnv(existingContent), lines);
+
+    const summary = t("pd.exampleSummary", {
+      added: merged.added.length,
+      removed: merged.removed.length,
+      kept: merged.kept.length,
+    });
+
+    if (exists) {
+      if (merged.content === existingContent) {
+        await showToast({ style: Toast.Style.Success, title: t("pd.exampleNoChangeToast") });
+        return;
+      }
+      const confirmed = await confirmAlert({
+        title: t("pd.exampleConfirmTitle"),
+        message: t("pd.exampleConfirmMessage", {
+          added: merged.added.length,
+          removed: merged.removed.length,
+          kept: merged.kept.length,
+        }),
+        primaryAction: { title: t("pd.exampleConfirmAction") },
+        dismissAction: { title: t("common.cancel") },
+      });
+      if (!confirmed) return;
+    }
+
+    // 走快照通道,和 .env 一样有退路
+    const result = await writeEnvFileWithSnapshot({
+      projectName: currentProject.name,
+      envFilePath: examplePath,
+      newContent: merged.content,
+      force: true,
+    });
+    await refreshEnvFiles();
     await showToast({
       style: Toast.Style.Success,
       title: t("pd.exampleSuccessTitle"),
-      message: t("pd.exampleSuccessMessage"),
+      message: [summary, snapshotLimitHint(result)].filter(Boolean).join(" · "),
     });
   };
 
