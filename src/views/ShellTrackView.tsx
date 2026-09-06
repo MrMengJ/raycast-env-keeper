@@ -11,7 +11,7 @@ import {
   showToast,
   Toast,
 } from "@raycast/api";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type ShellConfig,
   type ShellSnippet,
@@ -27,29 +27,36 @@ import {
   appendShellSourceLine,
   detectShellRc,
   getShellScriptPath,
+  type ConfigLoadProblem,
   loadShellConfig,
   readShellScript,
   removeShellSourceLine,
   saveShellConfig,
   type ShellRcInfo,
 } from "../services/storage.js";
+import { ConfigProblemItem } from "./ConfigProblemItem.js";
 import { EditShellSnippetForm } from "./EditShellSnippetForm.js";
 
 interface ShellTrackViewProps {
-  /** 轨道切换下拉框,由 manage-envs.tsx 传入,挂在这里唯一的 <List> 上(不要在外层再包一层 List) */
-  searchBarAccessory?: ReactNode;
+  /**
+   * 轨道切换下拉框,由 manage-envs.tsx 传入,挂在这里唯一的 <List> 上(不要在外层再包一层 List)。
+   * 类型要跟 List 的 searchBarAccessory 对齐:它只收 List.Dropdown 元素,ReactNode 太宽了
+   */
+  searchBarAccessory?: List.Props["searchBarAccessory"];
 }
 
 export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
   const [config, setConfig] = useState<ShellConfig>({ version: 1, snippets: [] });
   const [loading, setLoading] = useState(true);
   const [rcInfo, setRcInfo] = useState<ShellRcInfo | null>(null);
+  const [configProblem, setConfigProblem] = useState<ConfigLoadProblem | undefined>();
 
   const refreshConfig = async () => {
     setLoading(true);
     try {
-      const [c, rc] = await Promise.all([loadShellConfig(), detectShellRc()]);
-      setConfig(c);
+      const [loaded, rc] = await Promise.all([loadShellConfig(), detectShellRc()]);
+      setConfig(loaded.data);
+      setConfigProblem(loaded.problem);
       setRcInfo(rc);
     } catch (e) {
       await showToast({
@@ -221,6 +228,12 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
       searchBarPlaceholder={t("st.searchPlaceholder")}
       searchBarAccessory={searchBarAccessory}
     >
+      {configProblem && (
+        <List.Section title={t("cfg.sectionTitle")}>
+          <ConfigProblemItem problem={configProblem} />
+        </List.Section>
+      )}
+
       {rcInfo && (
         <List.Section title={t("st.bootstrapSection")}>
           <List.Item
@@ -368,7 +381,7 @@ function ShellScriptPreview() {
       actions={
         content ? (
           <ActionPanel>
-            <Action.CopyToClipboard title={t("st.previewCopy")} content={content} />
+            <Action.CopyToClipboard title={t("st.previewCopy")} content={content} concealed />
           </ActionPanel>
         ) : undefined
       }
@@ -476,7 +489,7 @@ function SnippetListItem({
             />
           )}
           <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
-          <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} />
+          <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
           <Action
             title={t("st.actionDelete")}
             icon={Icon.Trash}

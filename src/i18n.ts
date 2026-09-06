@@ -19,6 +19,15 @@ const zh = {
   "common.searchPlaceholder": "搜索...",
   "common.snapshotLimitMessage": "已存了 {count} 份快照（建议不超过 {limit} 份），可以在快照历史里清理一些旧的",
 
+  // ---- 配置文件异常提示 ----
+  "cfg.sectionTitle": "需要你处理",
+  "cfg.corruptedTitle": "配置文件读不出来，已保住原文件",
+  "cfg.corruptedSubtitle": "原文件已改名为 {name}，里面的内容还在。把格式修好后改回原名就能恢复",
+  "cfg.tooNewTitle": "配置文件来自更新版本的 Env Butler",
+  "cfg.tooNewSubtitle":
+    "文件版本 {version}，当前扩展只认到 {current}。原文件已改名为 {name}，升级扩展后改回原名即可恢复",
+  "cfg.showBackup": "在访达中显示原文件",
+
   // ---- manage-envs 主命令 ----
   "mv.searchPlaceholderProjects": "搜索已登记的项目...",
   "mv.trackTooltip": "切换轨道",
@@ -326,6 +335,15 @@ const en: Record<DictKey, string> = {
   "common.searchPlaceholder": "Search...",
   "common.snapshotLimitMessage":
     "{count} snapshots kept (we suggest staying under {limit}) — you can clear out old ones in Snapshot History",
+
+  "cfg.sectionTitle": "Needs Your Attention",
+  "cfg.corruptedTitle": "Could not read the config file — the original was kept",
+  "cfg.corruptedSubtitle":
+    "The original was renamed to {name} and still holds your data. Fix its format and rename it back to restore it",
+  "cfg.tooNewTitle": "This config file comes from a newer Env Butler",
+  "cfg.tooNewSubtitle":
+    "File version {version}, this build only understands up to {current}. The original was renamed to {name} — update the extension and rename it back to restore it",
+  "cfg.showBackup": "Show Original File in Finder",
 
   "mv.searchPlaceholderProjects": "Search registered projects...",
   "mv.trackTooltip": "Switch Track",

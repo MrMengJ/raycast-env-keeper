@@ -147,7 +147,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
 
   // 关闭该项目的 .envrc 提示(写入 registry,仅影响本项目)
   const handleDismissEnvrc = async () => {
-    const registry = await loadRegistry();
+    const { data: registry } = await loadRegistry();
     const updated = setEnvrcNoticeDismissed(registry, currentProject.id, true);
     await saveRegistry(updated);
     const p = updated.projects.find((item) => item.id === currentProject.id);
@@ -162,7 +162,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
   // 切换变量敏感状态（保存到 registry，不污染 .env）
   const handleToggleSecret = async (key: string) => {
     const wasSecret = isSecretKey(key, currentProject.customSecrets);
-    const registry = await loadRegistry();
+    const { data: registry } = await loadRegistry();
     const updated = toggleProjectSecret(registry, currentProject.id, key);
     await saveRegistry(updated);
     const p = updated.projects.find((item) => item.id === currentProject.id);
@@ -360,7 +360,8 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                         onAction={() => toggleRevealKey(kv.key)}
                       />
                     )}
-                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} />
+                    {/* concealed:变量值可能是密钥,不该留在 Raycast 的剪贴板历史里被搜到 */}
+                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
                   </ActionPanel.Section>
 

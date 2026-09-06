@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -17,6 +17,10 @@ import {
   parseSnapshotFilename,
   checkSnapshotSoftLimit,
   SNAPSHOT_SOFT_LIMIT,
+  ConfigFileError,
+  type ConfigFailureReason,
+  CURRENT_REGISTRY_VERSION,
+  CURRENT_SHELL_CONFIG_VERSION,
 } from "@env-butler/core";
 
 const BASE_DIR = join(homedir(), ".env-butler");
@@ -24,9 +28,100 @@ const REGISTRY_FILE = join(BASE_DIR, "registry.json");
 const SHELL_CONFIG_FILE = join(BASE_DIR, "shell.json");
 const SHELL_SCRIPT_FILE = join(BASE_DIR, "shell.sh");
 const SNAPSHOTS_DIR = join(BASE_DIR, "snapshots");
+const BACKUPS_DIR = join(BASE_DIR, "backups");
 
 export function getBaseDir(): string {
   return BASE_DIR;
+}
+
+/** 给隔离文件/备份文件用的时间戳后缀,和快照命名保持同一种可读格式 */
+function fileTimestamp(date = new Date()): string {
+  const p = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}-${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
+}
+
+/**
+ * 原子写:先写同目录下的临时文件,再 rename 覆盖目标。
+ * 同一文件系统内 rename 是原子的——读到的要么是完整的旧文件、要么是完整的新文件,
+ * 不会出现"写到一半进程被杀"留下的残缺内容(Raycast 被系统内存回收过,这不是假想)。
+ *
+ * 两个必须处理的细节:
+ * - 目标是符号链接时先解析真实路径,否则 rename 会把链接本身换掉
+ * - 保留原文件权限:用户可能把 .env chmod 600 过,不能因为一次保存又放开成 644
+ */
+export async function writeFileAtomic(filePath: string, content: string, explicitMode?: number): Promise<void> {
+  let target = filePath;
+  if (existsSync(filePath)) {
+    try {
+      target = await realpath(filePath);
+    } catch {
+      // 解析不了就按原路径写
+    }
+  }
+
+  let mode = explicitMode;
+  if (mode === undefined && existsSync(target)) {
+    try {
+      mode = (await stat(target)).mode & 0o777;
+    } catch {
+      // 拿不到就用系统默认
+    }
+  }
+
+  const dir = dirname(target);
+  const tmpPath = join(dir, `.${basename(target)}.env-butler-tmp-${process.pid}-${Date.now()}`);
+  try {
+    await writeFile(tmpPath, content, mode === undefined ? { encoding: "utf8" } : { encoding: "utf8", mode });
+    await rename(tmpPath, target);
+  } catch (e) {
+    try {
+      await unlink(tmpPath);
+    } catch {
+      // 临时文件清不掉不影响主流程
+    }
+    throw e;
+  }
+}
+
+/** 配置文件读不出来时的情况说明,交给界面告诉用户发生了什么 */
+export interface ConfigLoadProblem {
+  reason: ConfigFailureReason;
+  /** 原文件被挪到了哪里(绝对路径),数据还在里面 */
+  backupPath: string;
+  /** 仅 tooNew 时有值:文件里声明的版本号 */
+  fileVersion?: number;
+  /** 当前扩展支持到的版本,给界面组织提示文案用 */
+  currentVersion: number;
+}
+
+export interface LoadResult<T> {
+  data: T;
+  problem?: ConfigLoadProblem;
+}
+
+/**
+ * 读不出来的配置文件挪到一边,绝不原地覆盖。
+ * 这是整条链路的关键:只要原文件还在,用户就有机会自己修个逗号救回来。
+ */
+async function quarantineConfigFile(
+  filePath: string,
+  error: unknown,
+  currentVersion: number,
+): Promise<ConfigLoadProblem> {
+  const reason: ConfigFailureReason = error instanceof ConfigFileError ? error.reason : "malformed";
+  const suffix = reason === "tooNew" ? "unsupported" : "corrupted";
+  const backupPath = `${filePath}.${suffix}-${fileTimestamp()}`;
+  try {
+    await rename(filePath, backupPath);
+  } catch {
+    // 连改名都失败(权限等),至少把路径报出去让用户自己看
+  }
+  return {
+    reason,
+    backupPath,
+    fileVersion: error instanceof ConfigFileError ? error.fileVersion : undefined,
+    currentVersion,
+  };
 }
 
 export function getShellScriptPath(): string {
@@ -83,24 +178,44 @@ export async function detectShellRc(): Promise<ShellRcInfo> {
 }
 
 /**
+ * 动用户的 shell 配置文件之前先存一份副本。
+ * .zshrc 不是普通文件——它每开一个终端都会执行,写坏了的表现是"以后每次开终端都报错",
+ * 而且用户很难联想到是这个扩展干的。一次 copyFile 的成本换这个保险很划算。
+ * 返回备份路径(存不了就返回 undefined,不阻断主流程)。
+ */
+export async function backupShellRc(rcPath: string): Promise<string | undefined> {
+  if (!existsSync(rcPath)) return undefined;
+  try {
+    await mkdir(BACKUPS_DIR, { recursive: true });
+    const backupPath = join(BACKUPS_DIR, `${basename(rcPath)}-${fileTimestamp()}`);
+    await copyFile(rcPath, backupPath);
+    return backupPath;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 把 source 那一行追加到用户的 shell 配置文件末尾(仅追加,不改动已有任何内容)
  * 用一段带标记的注释包住,方便用户日后自己识别/手动删除
  */
-export async function appendShellSourceLine(rcPath: string, sourceLine: string): Promise<void> {
+export async function appendShellSourceLine(rcPath: string, sourceLine: string): Promise<{ backupPath?: string }> {
   const block = `# Added by Env Butler\n${sourceLine}\n`;
+  const backupPath = await backupShellRc(rcPath);
 
   if (!existsSync(rcPath)) {
     const dir = dirname(rcPath);
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    await writeFile(rcPath, block, "utf8");
-    return;
+    await writeFileAtomic(rcPath, block);
+    return { backupPath };
   }
 
   const content = await readFile(rcPath, "utf8");
   const separator = content === "" || content.endsWith("\n") ? "\n" : "\n\n";
-  await writeFile(rcPath, content + separator + block, "utf8");
+  await writeFileAtomic(rcPath, content + separator + block);
+  return { backupPath };
 }
 
 /**
@@ -108,7 +223,7 @@ export async function appendShellSourceLine(rcPath: string, sourceLine: string):
  * 匹配"含 .env-butler/shell.sh 的行",不管当初是自动写入还是用户手动加的都能识别;
  * 顺手删掉紧邻在它前面的 "# Added by Env Butler" 标记注释,并收敛删除后留下的多余空行。
  */
-export async function removeShellSourceLine(rcPath: string): Promise<{ removed: boolean }> {
+export async function removeShellSourceLine(rcPath: string): Promise<{ removed: boolean; backupPath?: string }> {
   if (!existsSync(rcPath)) return { removed: false };
 
   const content = await readFile(rcPath, "utf8");
@@ -139,8 +254,9 @@ export async function removeShellSourceLine(rcPath: string): Promise<{ removed: 
     collapsed.pop();
   }
 
-  await writeFile(rcPath, collapsed.length > 0 ? collapsed.join("\n") + "\n" : "", "utf8");
-  return { removed: true };
+  const backupPath = await backupShellRc(rcPath);
+  await writeFileAtomic(rcPath, collapsed.length > 0 ? collapsed.join("\n") + "\n" : "");
+  return { removed: true, backupPath };
 }
 
 /**
@@ -158,18 +274,30 @@ export async function ensureStorageDirs(): Promise<void> {
 /**
  * 读取项目注册表
  */
-export async function loadRegistry(): Promise<RegistryData> {
+export async function loadRegistry(): Promise<LoadResult<RegistryData>> {
   await ensureStorageDirs();
   if (!existsSync(REGISTRY_FILE)) {
     const empty = createEmptyRegistry();
-    await writeFile(REGISTRY_FILE, formatRegistry(empty), "utf8");
-    return empty;
+    await writeFileAtomic(REGISTRY_FILE, formatRegistry(empty));
+    return { data: empty };
   }
+
+  let content: string;
   try {
-    const content = await readFile(REGISTRY_FILE, "utf8");
-    return parseRegistry(content);
+    content = await readFile(REGISTRY_FILE, "utf8");
   } catch {
-    return createEmptyRegistry();
+    // 读不到文件(权限等)不等于文件坏了,不隔离,直接当空处理
+    return { data: createEmptyRegistry() };
+  }
+
+  try {
+    return { data: parseRegistry(content) };
+  } catch (e) {
+    // 内容有问题:把原文件挪到一边保住数据,再把情况报给界面
+    return {
+      data: createEmptyRegistry(),
+      problem: await quarantineConfigFile(REGISTRY_FILE, e, CURRENT_REGISTRY_VERSION),
+    };
   }
 }
 
@@ -178,24 +306,34 @@ export async function loadRegistry(): Promise<RegistryData> {
  */
 export async function saveRegistry(registry: RegistryData): Promise<void> {
   await ensureStorageDirs();
-  await writeFile(REGISTRY_FILE, formatRegistry(registry), "utf8");
+  await writeFileAtomic(REGISTRY_FILE, formatRegistry(registry));
 }
 
 /**
  * 读取全局 Shell 配置
  */
-export async function loadShellConfig(): Promise<ShellConfig> {
+export async function loadShellConfig(): Promise<LoadResult<ShellConfig>> {
   await ensureStorageDirs();
   if (!existsSync(SHELL_CONFIG_FILE)) {
     const empty = createEmptyShellConfig();
-    await writeFile(SHELL_CONFIG_FILE, formatShellConfig(empty), "utf8");
-    return empty;
+    await writeFileAtomic(SHELL_CONFIG_FILE, formatShellConfig(empty));
+    return { data: empty };
   }
+
+  let content: string;
   try {
-    const content = await readFile(SHELL_CONFIG_FILE, "utf8");
-    return parseShellConfig(content);
+    content = await readFile(SHELL_CONFIG_FILE, "utf8");
   } catch {
-    return createEmptyShellConfig();
+    return { data: createEmptyShellConfig() };
+  }
+
+  try {
+    return { data: parseShellConfig(content) };
+  } catch (e) {
+    return {
+      data: createEmptyShellConfig(),
+      problem: await quarantineConfigFile(SHELL_CONFIG_FILE, e, CURRENT_SHELL_CONFIG_VERSION),
+    };
   }
 }
 
@@ -204,9 +342,11 @@ export async function loadShellConfig(): Promise<ShellConfig> {
  */
 export async function saveShellConfig(config: ShellConfig): Promise<void> {
   await ensureStorageDirs();
-  await writeFile(SHELL_CONFIG_FILE, formatShellConfig(config), "utf8");
+  await writeFileAtomic(SHELL_CONFIG_FILE, formatShellConfig(config));
   const scriptContent = generateShellScript(config.snippets);
-  await writeFile(SHELL_SCRIPT_FILE, scriptContent, { encoding: "utf8", mode: 0o755 });
+  // shell.sh 必须显式带上可执行位:走临时文件 + rename 的话权限跟的是临时文件,
+  // 不显式指定就会丢掉 0o755
+  await writeFileAtomic(SHELL_SCRIPT_FILE, scriptContent, 0o755);
 }
 
 /**
@@ -254,7 +394,7 @@ export async function createEnvFile(projectPath: string, filename: string): Prom
   if (!existsSync(projectPath)) {
     await mkdir(projectPath, { recursive: true });
   }
-  await writeFile(filePath, "", "utf8");
+  await writeFileAtomic(filePath, "");
   return { created: true };
 }
 
@@ -333,7 +473,7 @@ export async function writeEnvFileWithSnapshot(options: {
 
     const snapshotFilename = generateSnapshotFilename(basename(envFilePath));
     snapshotPath = join(projectSnapshotDir, snapshotFilename);
-    await writeFile(snapshotPath, oldContent, "utf8");
+    await writeFileAtomic(snapshotPath, oldContent);
 
     // 打完快照后数一下这个项目累计了多少份。超过软上限只是提示用户按需清理,
     // 不自动删除——快照是安全网,自动清理与这个定位相冲突(设计决议 Q12)
@@ -351,7 +491,7 @@ export async function writeEnvFileWithSnapshot(options: {
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
   }
-  await writeFile(envFilePath, newContent, "utf8");
+  await writeFileAtomic(envFilePath, newContent);
   const newFingerprint = computeFingerprint(newContent);
 
   return {

@@ -27,7 +27,7 @@ export default function Command() {
     async function loadAllVars() {
       setLoading(true);
       try {
-        const reg = await loadRegistry();
+        const { data: reg } = await loadRegistry();
         const collected: MatchedVariable[] = [];
 
         for (const project of reg.projects) {
@@ -133,7 +133,7 @@ export default function Command() {
                       onAction={() => toggleReveal(uniqueId)}
                     />
                   )}
-                  <Action.CopyToClipboard title={t("search.actionCopyValue")} content={item.value} />
+                  <Action.CopyToClipboard title={t("search.actionCopyValue")} content={item.value} concealed />
                   <Action.CopyToClipboard title={t("search.actionCopyKey")} content={item.key} />
                   <Action.OpenWith title={t("mv.actionOpenWith")} path={item.envFilePath} />
                 </ActionPanel>

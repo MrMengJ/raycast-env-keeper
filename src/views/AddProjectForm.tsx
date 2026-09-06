@@ -32,7 +32,7 @@ export function AddProjectForm({ onProjectAdded }: AddProjectFormProps) {
     }
 
     try {
-      const registry = await loadRegistry();
+      const { data: registry } = await loadRegistry();
       const finalName = name.trim() || basename(cleanPath);
       const { registry: updatedRegistry, project } = addProject(registry, {
         name: finalName,

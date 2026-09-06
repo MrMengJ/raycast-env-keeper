@@ -14,7 +14,8 @@ import {
 import { useEffect, useState } from "react";
 import { type ProjectMeta, removeProject, sortProjectsByRecent, touchProject } from "@env-butler/core";
 import { t } from "./i18n.js";
-import { detectProjectEnvFiles, loadRegistry, saveRegistry } from "./services/storage.js";
+import { type ConfigLoadProblem, detectProjectEnvFiles, loadRegistry, saveRegistry } from "./services/storage.js";
+import { ConfigProblemItem } from "./views/ConfigProblemItem.js";
 import { AddProjectForm } from "./views/AddProjectForm.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
@@ -29,6 +30,7 @@ export default function Command() {
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [envCounts, setEnvCounts] = useState<Record<string, number>>({});
+  const [configProblem, setConfigProblem] = useState<ConfigLoadProblem | undefined>();
 
   // 启动时读取上次打开的轨道
   useEffect(() => {
@@ -48,7 +50,8 @@ export default function Command() {
   const refreshProjects = async () => {
     setLoading(true);
     try {
-      const reg = await loadRegistry();
+      const { data: reg, problem } = await loadRegistry();
+      setConfigProblem(problem);
       const sorted = sortProjectsByRecent(reg);
       setProjects(sorted);
 
@@ -77,7 +80,7 @@ export default function Command() {
   }, []);
 
   const handleOpenProject = async (p: ProjectMeta) => {
-    const reg = await loadRegistry();
+    const { data: reg } = await loadRegistry();
     const updated = touchProject(reg, p.id);
     await saveRegistry(updated);
   };
@@ -97,7 +100,7 @@ export default function Command() {
 
     if (!confirmed) return;
 
-    const reg = await loadRegistry();
+    const { data: reg } = await loadRegistry();
     const updated = removeProject(reg, p.id);
     await saveRegistry(updated);
     await refreshProjects();
@@ -129,6 +132,12 @@ export default function Command() {
       searchBarPlaceholder={t("mv.searchPlaceholderProjects")}
       searchBarAccessory={trackDropdown}
     >
+      {configProblem && (
+        <List.Section title={t("cfg.sectionTitle")}>
+          <ConfigProblemItem problem={configProblem} />
+        </List.Section>
+      )}
+
       <List.Section title={t("mv.sectionTitle")} subtitle={t("mv.sectionSubtitle", { count: projects.length })}>
         {projects.map((p) => {
           const envCount = envCounts[p.id] ?? 1;

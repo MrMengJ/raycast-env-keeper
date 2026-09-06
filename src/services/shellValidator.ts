@@ -23,7 +23,9 @@ export async function validateShellSyntax(
   try {
     // 通过 stdin 将内容喂给 `<shell> -n`;shellKind 只可能是 "zsh"/"bash" 字面量,非用户输入,拼接安全
     const child = exec(`${shellKind} -n`);
-    if (!child.stdin) {
+    // 存成局部常量:直接用 child.stdin 的话,类型收窄进不了下面的 Promise 闭包
+    const stdin = child.stdin;
+    if (!stdin) {
       return { valid: true };
     }
 
@@ -46,8 +48,8 @@ export async function validateShellSyntax(
         resolve({ valid: true, error: err.message });
       });
 
-      child.stdin.write(scriptContent);
-      child.stdin.end();
+      stdin.write(scriptContent);
+      stdin.end();
     });
   } catch {
     return { valid: true };

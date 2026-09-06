@@ -200,7 +200,8 @@ export function SnapshotHistoryView({
             actions={
               <ActionPanel>
                 <Action title={t("sh.actionRestore")} icon={Icon.Undo} onAction={() => handleRestore(item)} />
-                <Action.CopyToClipboard title={t("sh.actionCopyContent")} content={previewContent} />
+                {/* 快照是 .env 文件原文,里面是明文密钥 */}
+                <Action.CopyToClipboard title={t("sh.actionCopyContent")} content={previewContent} concealed />
                 <Action
                   title={t("sh.actionDelete")}
                   icon={Icon.Trash}
