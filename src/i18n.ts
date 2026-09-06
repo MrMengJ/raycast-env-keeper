@@ -31,7 +31,7 @@ const zh = {
   "mv.actionManage": "管理环境变量",
   "mv.actionAddProject": "登记新项目",
   "mv.actionOpenWith": "用其他应用打开",
-  "mv.actionRemove": "从注册表中移除",
+  "mv.actionRemove": "不再管理此项目",
   "mv.removeConfirmTitle": "移除项目: {name}",
   "mv.removeConfirmMessage": "这仅会从 Env Butler 注册表中移除该项目的登记记录，绝不会删除本地实际目录或 .env 文件。",
   "mv.removeConfirmAction": "移除",
@@ -338,7 +338,7 @@ const en: Record<DictKey, string> = {
   "mv.actionManage": "Manage Environment Variables",
   "mv.actionAddProject": "Register New Project",
   "mv.actionOpenWith": "Open With...",
-  "mv.actionRemove": "Remove from Registry",
+  "mv.actionRemove": "Stop Managing This Project",
   "mv.removeConfirmTitle": "Remove Project: {name}",
   "mv.removeConfirmMessage":
     "This only removes the registration entry from Env Butler. It will never delete the actual local directory or .env files.",

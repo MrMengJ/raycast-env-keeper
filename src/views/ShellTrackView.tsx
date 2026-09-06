@@ -381,11 +381,17 @@ function buildSnippetDetailMarkdown(item: ShellSnippet, orderIndex: number, orde
   const statusLabel = item.enabled ? t("st.enabledTag") : t("st.disabledTag");
   const descriptionLabel = item.description || t("st.detailNone");
 
+  // 用纯文本行而不是 markdown 列表:列表符号会被 Raycast 渲染成主题色圆点,
+  // 红色在界面里通常意味着错误,而这里只是普通信息,容易误导
   return `${t("st.detailHeading")}
-- **${t("st.detailType")}**: ${snippetTypeLabel(item.type)}
-- **${t("st.detailStatus")}**: ${statusLabel}
-- **${t("st.detailOrder")}**: ${t("st.detailOrderValue", { index: orderIndex, total: orderTotal })}
-- **${t("st.detailDescription")}**: ${descriptionLabel}
+
+**${t("st.detailType")}**: ${snippetTypeLabel(item.type)}
+
+**${t("st.detailStatus")}**: ${statusLabel}
+
+**${t("st.detailOrder")}**: ${t("st.detailOrderValue", { index: orderIndex, total: orderTotal })}
+
+**${t("st.detailDescription")}**: ${descriptionLabel}
 
 ---
 
@@ -420,12 +426,16 @@ function SnippetListItem({
     <List.Item
       id={item.id}
       title={item.name}
-      accessories={[
-        // 顺序号在左、状态在右:accessories 整体右对齐,放最后的状态图标会落在同一条竖线上,一列扫下来最快
-        { tag: { value: `${orderIndex}/${orderTotal}`, color: Color.SecondaryText }, tooltip: t("st.orderTooltip") },
+      // 状态放左侧图标位:所有行的图标在同一条竖线上,一列扫下来最快;
+      // 右侧只留顺序号,避免开着详情面板时把列表挤得太窄
+      icon={
         item.enabled
-          ? { icon: { source: Icon.CheckCircle, tintColor: Color.Green }, tooltip: t("st.enabledTag") }
-          : { icon: { source: Icon.Pause, tintColor: Color.SecondaryText }, tooltip: t("st.disabledTag") },
+          ? { source: Icon.CheckCircle, tintColor: Color.Green }
+          : { source: Icon.Pause, tintColor: Color.SecondaryText }
+      }
+      accessories={[
+        // 带 # 前缀,免得裸数字被误读成"几项"(分组标题上已经在用裸数字表示数量)
+        { tag: { value: `#${orderIndex}`, color: Color.SecondaryText }, tooltip: t("st.orderTooltip") },
       ]}
       detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal)} />}
       actions={
