@@ -314,12 +314,113 @@ export async function backupShellRc(rcPath: string): Promise<string | undefined>
   if (!existsSync(rcPath)) return undefined;
   try {
     await mkdir(BACKUPS_DIR, { recursive: true });
-    const backupPath = join(BACKUPS_DIR, `${basename(rcPath)}-${fileTimestamp()}`);
+    // 必须走 uniqueBackupPath:时间戳只精确到秒,同一秒内的第二次备份会直接
+    // 覆盖掉第一份。"手动存一份 → 立刻恢复"正好落在同一秒里,
+    // 结果是安全备份把用户刚存的那份原件盖掉,恢复出来的反而是坏内容
+    const backupPath = uniqueBackupPath(BACKUPS_DIR, `${basename(rcPath)}-${fileTimestamp()}`);
     await copyFile(rcPath, backupPath);
     return backupPath;
   } catch {
     return undefined;
   }
+}
+
+/** 备份文件名形如 `.zshrc-20260906-143000`,同一秒内再备份会补 -2 / -3 */
+function uniqueBackupPath(dir: string, filename: string): string {
+  const first = join(dir, filename);
+  if (!existsSync(first)) return first;
+  for (let i = 2; i < 1000; i++) {
+    const candidate = join(dir, `${filename}-${i}`);
+    if (!existsSync(candidate)) return candidate;
+  }
+  return first;
+}
+
+export function getBackupsDir(): string {
+  return BACKUPS_DIR;
+}
+
+export interface RcBackupItem {
+  filename: string;
+  filePath: string;
+  /** 被备份的原文件名,如 .zshrc */
+  originName: string;
+  /** 形如 20260906-143000 */
+  timestampStr: string;
+  size: number;
+  mtime: Date;
+}
+
+const RC_BACKUP_RE = /^(\..+)-(\d{8}-\d{6})(?:-\d+)?$/;
+
+/**
+ * 列出备份目录里的 shell 配置文件副本(默认目录里的那些)。
+ * 用户手动备份到别处的副本这里看不到——那是用户自己保管的文件,扩展不去追踪。
+ */
+export async function listShellRcBackups(): Promise<RcBackupItem[]> {
+  if (!existsSync(BACKUPS_DIR)) return [];
+  try {
+    const entries = await readdir(BACKUPS_DIR, { withFileTypes: true });
+    const items: RcBackupItem[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const match = RC_BACKUP_RE.exec(entry.name);
+      if (!match?.[1] || !match[2]) continue;
+      const filePath = join(BACKUPS_DIR, entry.name);
+      const fileStat = await stat(filePath);
+      items.push({
+        filename: entry.name,
+        filePath,
+        originName: match[1],
+        timestampStr: match[2],
+        size: fileStat.size,
+        mtime: fileStat.mtime,
+      });
+    }
+    return items.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  } catch {
+    return [];
+  }
+}
+
+export async function readShellRcBackup(filePath: string): Promise<string> {
+  return readFile(filePath, "utf8");
+}
+
+export async function deleteShellRcBackup(filePath: string): Promise<void> {
+  if (existsSync(filePath)) await unlink(filePath);
+}
+
+/**
+ * 用户主动备份 shell 配置文件。
+ * 跟 backupShellRc 的区别是**出错要抛出来**:自动备份只是顺手上的保险,
+ * 失败了不该拖累主流程;而手动备份本身就是用户此刻唯一想做的事,
+ * 悄悄失败等于给了一份不存在的安心。
+ * targetDir 留空则存进扩展自己的备份目录。
+ */
+export async function backupShellRcTo(rcPath: string, targetDir?: string): Promise<string> {
+  if (!existsSync(rcPath)) {
+    throw new Error(`${rcPath} 不存在`);
+  }
+  const dir = targetDir?.trim() ? targetDir : BACKUPS_DIR;
+  await mkdir(dir, { recursive: true });
+  const backupPath = uniqueBackupPath(dir, `${basename(rcPath)}-${fileTimestamp()}`);
+  await copyFile(rcPath, backupPath);
+  return backupPath;
+}
+
+/**
+ * 把某份备份写回 shell 配置文件。
+ * 写回之前先把"现在的"再备份一份——否则这个恢复动作本身就成了不可逆操作。
+ */
+export async function restoreShellRcBackup(backupPath: string, rcPath: string): Promise<{ safetyBackupPath?: string }> {
+  if (!existsSync(backupPath)) {
+    throw new Error(`备份文件不存在: ${backupPath}`);
+  }
+  const safetyBackupPath = await backupShellRc(rcPath);
+  const content = await readFile(backupPath, "utf8");
+  await writeFileAtomic(rcPath, content);
+  return { safetyBackupPath };
 }
 
 /**

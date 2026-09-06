@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { diffEnvVariables, isSecretKey, maskSecret, parseEnv } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
+import { diffSection, formatEnvDiff } from "./diffFormat.js";
 import { SnapshotCleanupForm } from "./SnapshotCleanupForm.js";
 
 interface SnapshotHistoryViewProps {
@@ -29,19 +30,40 @@ export function SnapshotHistoryView({
   const [loading, setLoading] = useState(true);
   const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotItem | null>(null);
   const [previewContent, setPreviewContent] = useState<string>("");
+  /** 选中项再往前一份的内容;null 表示这已经是最早的一份 */
+  const [prevContent, setPrevContent] = useState<string | null>(null);
+
+  // 选中哪份就读哪份,顺带把更早的一份也读进来——差异区要回答的第一个问题是
+  // "这一次保存到底改了什么",只跟当前文件比是答不出来的
+  const loadPreview = async (list: SnapshotItem[], item: SnapshotItem) => {
+    setSelectedSnapshot(item);
+    try {
+      setPreviewContent(await readFile(item.filePath, "utf8"));
+    } catch {
+      setPreviewContent(t("sh.unreadableContent"));
+    }
+
+    const idx = list.findIndex((s) => s.filename === item.filename);
+    const older = idx >= 0 ? list[idx + 1] : undefined;
+    if (!older) {
+      setPrevContent(null);
+      return;
+    }
+    try {
+      setPrevContent(await readFile(older.filePath, "utf8"));
+    } catch {
+      setPrevContent(null);
+    }
+  };
 
   const refreshSnapshots = async () => {
     setLoading(true);
     try {
       const items = await listSnapshots(projectName, envFilename);
       setSnapshots(items);
-      if (items.length > 0 && !selectedSnapshot) {
-        const first = items[0];
-        if (first) {
-          setSelectedSnapshot(first);
-          const c = await readFile(first.filePath, "utf8");
-          setPreviewContent(c);
-        }
+      const first = items[0];
+      if (first && !selectedSnapshot) {
+        await loadPreview(items, first);
       }
     } finally {
       setLoading(false);
@@ -54,15 +76,7 @@ export function SnapshotHistoryView({
 
   const handleSelectionChange = async (id: string | null) => {
     const item = snapshots.find((s) => s.filename === id);
-    if (item) {
-      setSelectedSnapshot(item);
-      try {
-        const c = await readFile(item.filePath, "utf8");
-        setPreviewContent(c);
-      } catch {
-        setPreviewContent(t("sh.unreadableContent"));
-      }
-    }
+    if (item) await loadPreview(snapshots, item);
   };
 
   const handleRestore = async (item: SnapshotItem) => {
@@ -140,39 +154,35 @@ export function SnapshotHistoryView({
     })
     .join("\n");
 
-  // 快照(旧) vs 当前文件(新) 的差异;只挑改动的行,一致的不列出来。
-  // markdown 正文没法上色,用彩色 emoji 当颜色载体(🟢 新增 / 🔴 删除 / 🟡 改动),
-  // 这是在 CommonMark 里唯一能带颜色信号的办法。
-  const diffText = (() => {
-    const entries = diffEnvVariables(parseEnv(previewContent), parseEnv(currentContent)).filter(
-      (e) => e.type !== "unchanged",
-    );
+  const show = (key: string, value: string) => displayVal(key, value);
 
-    return entries
-      .map((e) => {
-        if (e.type === "added") {
-          return `- ${t("sh.diffAdded")}: \`${e.key}\` = \`${displayVal(e.key, e.targetValue)}\``;
-        }
-        if (e.type === "removed") {
-          return `- ${t("sh.diffRemoved")}: \`${e.key}\` = \`${displayVal(e.key, e.baseValue)}\``;
-        }
-        return `- ${t("sh.diffChanged")}: \`${e.key}\`: \`${displayVal(e.key, e.baseValue)}\` → \`${displayVal(e.key, e.targetValue)}\``;
-      })
-      .join("\n");
-  })();
+  // 上一份(更早) → 这一份:这一次保存改了什么
+  const diffFromPrev =
+    prevContent === null
+      ? t("diff.noPrev")
+      : formatEnvDiff(diffEnvVariables(parseEnv(prevContent), parseEnv(previewContent)), show);
 
+  // 这一份 → 当前文件:从这份记录到现在发生了什么
+  const diffToCurrent = formatEnvDiff(diffEnvVariables(parseEnv(previewContent), parseEnv(currentContent)), show);
+
+  // 信息行不用 markdown 列表:`- ` 会被渲染成主题色圆点,红色在界面里通常意味着错误
   const buildMarkdown = (item: SnapshotItem): string =>
     [
       `### ${t("sh.infoHeading")}`,
-      `- **${t("sh.infoTargetFile")}**: \`${item.envFilename}\``,
-      `- **${t("sh.infoRecordedAt")}**: \`${item.timestampStr}\``,
-      `- **${t("sh.infoFileSize")}**: \`${item.size} bytes\``,
+      "",
+      `**${t("sh.infoTargetFile")}**: \`${item.envFilename}\``,
+      "",
+      `**${t("sh.infoRecordedAt")}**: \`${item.timestampStr}\``,
+      "",
+      `**${t("sh.infoFileSize")}**: \`${item.size} bytes\``,
       "",
       "---",
       "",
-      `### ${t("sh.diffHeading")}`,
+      diffSection("fromPrev", diffFromPrev),
       "",
-      diffText || t("sh.diffNone"),
+      "---",
+      "",
+      diffSection("toCurrent", diffToCurrent),
       "",
       "---",
       "",
@@ -196,6 +206,7 @@ export function SnapshotHistoryView({
           <List.Item
             key={item.filename}
             id={item.filename}
+            icon={Icon.Clock}
             title={item.timestampStr}
             detail={<List.Item.Detail markdown={buildMarkdown(item)} />}
             actions={
@@ -214,7 +225,14 @@ export function SnapshotHistoryView({
                   title={t("sh.actionCleanup")}
                   icon={Icon.DeleteDocument}
                   target={
-                    <SnapshotCleanupForm envFilename={envFilename} snapshots={snapshots} onCleaned={refreshSnapshots} />
+                    <SnapshotCleanupForm
+                      navTitle={t("sh.cleanupNavTitle")}
+                      unit={t("sh.cleanupUnit")}
+                      description={t("sh.cleanupDescription", { file: envFilename })}
+                      snapshots={snapshots}
+                      onDelete={deleteSnapshot}
+                      onCleaned={refreshSnapshots}
+                    />
                   }
                 />
               </ActionPanel>

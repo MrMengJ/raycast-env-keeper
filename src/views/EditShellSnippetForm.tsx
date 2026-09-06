@@ -1,6 +1,12 @@
-import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, confirmAlert, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { matchesDeclaredType, type ShellSnippet, type ShellSnippetType } from "@env-butler/core";
+import {
+  lintShellSnippet,
+  matchesDeclaredType,
+  type ShellLintWarning,
+  type ShellSnippet,
+  type ShellSnippetType,
+} from "@env-butler/core";
 import { t } from "../i18n.js";
 import { validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";
 
@@ -24,6 +30,12 @@ const SNIPPET_TEMPLATES: Record<ShellSnippetType, string> = {
   alias: 'alias ll="ls -la"',
   snippet: ["# 任意 shell 代码,会原样写进 shell.sh", "mkcd() {", '  mkdir -p "$1" && cd "$1"', "}"].join("\n"),
 };
+
+function describeWarning(w: ShellLintWarning): string {
+  return w.suggestion
+    ? t("es.lintMisspelled", { line: w.line, word: w.word, suggestion: w.suggestion })
+    : t("es.lintUnknownPrefix", { line: w.line, word: w.word });
+}
 
 export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShellSnippetFormProps) {
   const { pop } = useNavigation();
@@ -61,6 +73,20 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
     if (!trimmedContent) {
       setContentError(t("es.contentEmptyError"));
       return;
+    }
+
+    // 拼写检查:`exprot PASSWORD=xxx` 语法完全合法,shell 自己永远报不出来,
+    // 但这一行绝不会生效。只能靠猜,所以是"提醒 + 让用户拍板",不是硬拦
+    const warnings = lintShellSnippet(trimmedContent);
+    if (warnings.length > 0) {
+      const proceed = await confirmAlert({
+        title: t("es.lintConfirmTitle"),
+        message: warnings.map(describeWarning).join("\n"),
+        primaryAction: { title: t("es.lintFixAction") },
+        dismissAction: { title: t("es.lintIgnoreAction") },
+      });
+      // 主按钮是"回去改":真写错的概率远高于"故意这么写",默认动作该指向修正
+      if (proceed) return;
     }
 
     // 用探测到的真实 shell 类型做语法校验(zsh -n / bash -n);识别不出来则跳过,不阻断保存

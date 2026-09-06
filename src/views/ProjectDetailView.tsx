@@ -25,6 +25,7 @@ import {
   toggleEnvVariable,
   mergeExampleEnv,
   isSecretKey,
+  formatKVRaw,
   isEncryptedValue,
   maskSecret,
   type ProjectMeta,
@@ -47,6 +48,10 @@ import { SnapshotHistoryView } from "./SnapshotHistoryView.js";
 interface ProjectDetailViewProps {
   project: ProjectMeta;
   onProjectUpdated?: (project: ProjectMeta) => void;
+  /** 从全局搜索跳过来时,直接停在搜到的那个环境文件上,而不是默认的 .env */
+  initialEnvFile?: string;
+  /** 从全局搜索跳过来时,直接选中搜到的那个变量 */
+  initialSelectedKey?: string;
 }
 
 /**
@@ -58,11 +63,18 @@ interface ProjectDetailViewProps {
  */
 const CREATE_ENV_FILE_VALUE = "__env_butler_create_env_file__";
 
-export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailViewProps) {
+export function ProjectDetailView({
+  project,
+  onProjectUpdated,
+  initialEnvFile,
+  initialSelectedKey,
+}: ProjectDetailViewProps) {
   const { push } = useNavigation();
   const [currentProject, setCurrentProject] = useState<ProjectMeta>(project);
   const [envFiles, setEnvFiles] = useState<string[]>([]);
-  const [selectedEnvFile, setSelectedEnvFile] = useState<string>(".env");
+  const [selectedEnvFile, setSelectedEnvFile] = useState<string>(initialEnvFile ?? ".env");
+  // 只有从全局搜索跳过来时才接管选中项;平时交给 Raycast 自己管,免得跟它的选中逻辑打架
+  const [selectedItemId, setSelectedItemId] = useState<string | undefined>(initialSelectedKey);
   const [lines, setLines] = useState<EnvLine[]>([]);
   const [currentFingerprint, setCurrentFingerprint] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -345,40 +357,49 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
     <List
       isLoading={loading}
       searchBarPlaceholder={t("pd.searchPlaceholder", { file: selectedEnvFile })}
+      {...(initialSelectedKey
+        ? { selectedItemId, onSelectionChange: (id: string | null) => setSelectedItemId(id ?? undefined) }
+        : {})}
       searchBarAccessory={
-        <List.Dropdown
-          tooltip={t("pd.switchEnvFileTooltip")}
-          value={selectedEnvFile}
-          onChange={(val) => {
-            if (val === CREATE_ENV_FILE_VALUE) {
-              push(
-                <CreateEnvFileForm
-                  projectPath={currentProject.path}
-                  onCreated={async (filename) => {
-                    await refreshEnvFiles();
-                    setSelectedEnvFile(filename);
-                  }}
-                />,
-              );
-              return;
-            }
-            setSelectedEnvFile(val);
-          }}
-          placeholder={t("common.searchPlaceholder")}
-        >
-          <List.Dropdown.Section>
-            {envFiles.map((f) => (
-              <List.Dropdown.Item key={f} value={f} title={f} icon={Icon.Document} />
-            ))}
-          </List.Dropdown.Section>
-          <List.Dropdown.Section>
-            <List.Dropdown.Item
-              value={CREATE_ENV_FILE_VALUE}
-              title={t("pd.createEnvFileItem")}
-              icon={Icon.NewDocument}
-            />
-          </List.Dropdown.Section>
-        </List.Dropdown>
+        // 文件列表还没探测出来之前不渲染下拉框:那一刻下拉里只剩"新建"这一个哨兵项,
+        // 而下拉在挂载时会把当前选中项回调一次,于是一进项目就自己弹出了新建表单
+        envFiles.length === 0 ? undefined : (
+          <List.Dropdown
+            tooltip={t("pd.switchEnvFileTooltip")}
+            value={selectedEnvFile}
+            onChange={(val) => {
+              // 双保险:哨兵只在真有文件可选时才认,挂载期的回调一律忽略
+              if (val === CREATE_ENV_FILE_VALUE && envFiles.length > 0) {
+                push(
+                  <CreateEnvFileForm
+                    projectPath={currentProject.path}
+                    onCreated={async (filename) => {
+                      await refreshEnvFiles();
+                      setSelectedEnvFile(filename);
+                    }}
+                  />,
+                );
+                return;
+              }
+              if (val === CREATE_ENV_FILE_VALUE) return;
+              setSelectedEnvFile(val);
+            }}
+            placeholder={t("common.searchPlaceholder")}
+          >
+            <List.Dropdown.Section>
+              {envFiles.map((f) => (
+                <List.Dropdown.Item key={f} value={f} title={f} icon={Icon.Document} />
+              ))}
+            </List.Dropdown.Section>
+            <List.Dropdown.Section>
+              <List.Dropdown.Item
+                value={CREATE_ENV_FILE_VALUE}
+                title={t("pd.createEnvFileItem")}
+                icon={Icon.NewDocument}
+              />
+            </List.Dropdown.Section>
+          </List.Dropdown>
+        )
       }
     >
       {hasEnvrc && (
@@ -411,6 +432,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
           return (
             <List.Item
               key={kv.key}
+              id={kv.key}
               title={kv.key}
               subtitle={displayValue}
               accessories={[
@@ -434,6 +456,12 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                     {/* concealed:变量值可能是密钥,不该留在 Raycast 的剪贴板历史里被搜到 */}
                     <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
+                    {/* 粘到别的 .env 或终端里最常用的其实是整行,不该逼人复制两次再自己拼 */}
+                    <Action.CopyToClipboard
+                      title={t("pd.actionCopyPair")}
+                      content={formatKVRaw(kv.key, kv.value, { quote: kv.quote, comment: kv.comment, end: "" })}
+                      concealed
+                    />
                   </ActionPanel.Section>
 
                   <ActionPanel.Section title={t("pd.sectionVariableActions")}>
@@ -542,49 +570,72 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
 
       {disabledKvs.length > 0 && (
         <List.Section title={t("pd.sectionDisabled")} subtitle={t("pd.countItems", { count: disabledKvs.length })}>
-          {disabledKvs.map((kv) => (
-            <List.Item
-              key={kv.key}
-              title={kv.key}
-              subtitle={kv.value}
-              accessories={[{ tag: { value: t("pd.disabledTag"), color: Color.SecondaryText } }]}
-              actions={
-                <ActionPanel>
-                  <Action
-                    title={t("pd.actionToggleOn")}
-                    icon={Icon.Play}
-                    shortcut={{ modifiers: ["cmd"], key: "t" }}
-                    onAction={() => handleToggleEnable(kv.key)}
-                  />
-                  <Action.Push
-                    title={t("pd.actionEdit")}
-                    icon={Icon.Pencil}
-                    shortcut={Keyboard.Shortcut.Common.Edit}
-                    target={
-                      <EditVariableForm
-                        initialData={{
-                          key: kv.key,
-                          value: kv.value,
-                          quote: kv.quote,
-                          disabled: kv.disabled,
-                          comment: kv.comment,
-                        }}
-                        customSecrets={currentProject.customSecrets}
-                        onSave={(data) => handleSaveVariable(data, kv.key)}
+          {disabledKvs.map((kv) => {
+            const isSecret = isSecretKey(kv.key, currentProject.customSecrets);
+            const isEncrypted = isEncryptedValue(kv.value);
+            const isRevealed = revealedKeys.has(kv.key);
+            // 禁用不等于不敏感:被注释掉的 PASSWORD 仍然是密码,打码规则必须跟启用项一致
+            const displayValue = (isSecret || isEncrypted) && !isRevealed ? maskSecret(kv.value) : kv.value;
+
+            return (
+              <List.Item
+                key={kv.key}
+                id={kv.key}
+                title={kv.key}
+                subtitle={displayValue}
+                accessories={[
+                  ...(isSecret
+                    ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("pd.lockTooltip") }]
+                    : []),
+                  { tag: { value: t("pd.disabledTag"), color: Color.SecondaryText } },
+                ]}
+                actions={
+                  <ActionPanel>
+                    <Action
+                      title={t("pd.actionToggleOn")}
+                      icon={Icon.Play}
+                      shortcut={{ modifiers: ["cmd"], key: "t" }}
+                      onAction={() => handleToggleEnable(kv.key)}
+                    />
+                    {(isSecret || isEncrypted) && (
+                      <Action
+                        title={isRevealed ? t("pd.actionHide") : t("pd.actionReveal")}
+                        icon={isRevealed ? Icon.EyeDisabled : Icon.Eye}
+                        onAction={() => toggleRevealKey(kv.key)}
                       />
-                    }
-                  />
-                  <Action
-                    title={t("pd.actionDelete")}
-                    icon={Icon.Trash}
-                    style={Action.Style.Destructive}
-                    shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-                    onAction={() => handleDeleteVariable(kv.key)}
-                  />
-                </ActionPanel>
-              }
-            />
-          ))}
+                    )}
+                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
+                    <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
+                    <Action.Push
+                      title={t("pd.actionEdit")}
+                      icon={Icon.Pencil}
+                      shortcut={Keyboard.Shortcut.Common.Edit}
+                      target={
+                        <EditVariableForm
+                          initialData={{
+                            key: kv.key,
+                            value: kv.value,
+                            quote: kv.quote,
+                            disabled: kv.disabled,
+                            comment: kv.comment,
+                          }}
+                          customSecrets={currentProject.customSecrets}
+                          onSave={(data) => handleSaveVariable(data, kv.key)}
+                        />
+                      }
+                    />
+                    <Action
+                      title={t("pd.actionDelete")}
+                      icon={Icon.Trash}
+                      style={Action.Style.Destructive}
+                      shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+                      onAction={() => handleDeleteVariable(kv.key)}
+                    />
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
         </List.Section>
       )}
 

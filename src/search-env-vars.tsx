@@ -23,6 +23,10 @@ interface MatchedVariable {
   /** 项目轨才有;Shell 轨的变量没有对应文件 */
   project?: ProjectMeta;
   envFilePath?: string;
+  /** 项目轨:变量所在的环境文件名,跳过去时要停在这个文件上而不是默认的 .env */
+  envFilename?: string;
+  /** Shell 轨:变量所在片段的 id,跳过去时直接选中它 */
+  snippetId?: string;
 }
 
 export default function Command() {
@@ -58,6 +62,7 @@ export default function Command() {
                       sourceLabel: `${project.name} / ${f}`,
                       project,
                       envFilePath: fullPath,
+                      envFilename: f,
                     }));
                 } catch {
                   // 单个文件读不了就跳过,不影响其余结果
@@ -76,6 +81,7 @@ export default function Command() {
             value: a.value,
             disabled: !snippet.enabled,
             sourceLabel: t("search.shellSource", { name: snippet.name }),
+            snippetId: snippet.id,
           })),
         );
 
@@ -141,14 +147,26 @@ export default function Command() {
               ]}
               actions={
                 <ActionPanel>
+                  {/* 跳过去要落在搜到的那一项上:带上环境文件名和变量名,否则搜到
+                      .env.prod 里的变量、跳过去看到的却是 .env 的列表顶端 */}
                   {item.project ? (
                     <Action.Push
                       title={t("search.actionGoto")}
                       icon={Icon.ArrowRight}
-                      target={<ProjectDetailView project={item.project} />}
+                      target={
+                        <ProjectDetailView
+                          project={item.project}
+                          initialEnvFile={item.envFilename}
+                          initialSelectedKey={item.key}
+                        />
+                      }
                     />
                   ) : (
-                    <Action.Push title={t("search.actionGotoShell")} icon={Icon.Terminal} target={<ShellTrackView />} />
+                    <Action.Push
+                      title={t("search.actionGotoShell")}
+                      icon={Icon.Terminal}
+                      target={<ShellTrackView initialSelectedId={item.snippetId} />}
+                    />
                   )}
                   {(isSecret || isEncrypted) && (
                     <Action

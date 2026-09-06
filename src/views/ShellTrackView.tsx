@@ -38,6 +38,7 @@ import {
 } from "../services/storage.js";
 import { ConfigProblemItem } from "./ConfigProblemItem.js";
 import { ShellConfigHistoryView } from "./ShellConfigHistoryView.js";
+import { ShellRcBackupsView } from "./ShellRcBackupsView.js";
 import { EditShellSnippetForm } from "./EditShellSnippetForm.js";
 
 interface ShellTrackViewProps {
@@ -46,15 +47,19 @@ interface ShellTrackViewProps {
    * 类型要跟 List 的 searchBarAccessory 对齐:它只收 List.Dropdown 元素,ReactNode 太宽了
    */
   searchBarAccessory?: List.Props["searchBarAccessory"];
+  /** 从全局搜索跳过来时,直接选中搜到的那个片段 */
+  initialSelectedId?: string;
 }
 
-export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
+export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellTrackViewProps) {
   const [config, setConfig] = useState<ShellConfig>({ version: 1, snippets: [] });
   const [loading, setLoading] = useState(true);
   const [rcInfo, setRcInfo] = useState<ShellRcInfo | null>(null);
   const [configProblem, setConfigProblem] = useState<ConfigLoadProblem | undefined>();
   // 片段内容默认打码,和项目轨的行为对齐;需要看明文时手动切开
   const [revealSecrets, setRevealSecrets] = useState(false);
+  // 只有从全局搜索跳过来时才接管选中项;平时交给 Raycast 自己管
+  const [selectedItemId, setSelectedItemId] = useState<string | undefined>(initialSelectedId);
 
   const refreshConfig = async () => {
     setLoading(true);
@@ -93,8 +98,13 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
     if (!confirmed) return;
 
     try {
-      await appendShellSourceLine(rc.rcPath, sourceLine);
-      await showToast({ style: Toast.Style.Success, title: t("st.enabledIntegrationToast") });
+      // 动 .zshrc 之前存的那份副本,得让用户看见——不然这份保险等于不存在
+      const { backupPath } = await appendShellSourceLine(rc.rcPath, sourceLine);
+      await showToast({
+        style: Toast.Style.Success,
+        title: t("st.enabledIntegrationToast"),
+        message: backupPath ? t("st.rcBackupNote", { path: backupPath }) : undefined,
+      });
       await refreshConfig();
     } catch (e) {
       await showToast({
@@ -121,8 +131,12 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
     if (!confirmed) return;
 
     try {
-      await removeShellSourceLine(rc.rcPath);
-      await showToast({ style: Toast.Style.Success, title: t("st.disabledIntegrationToast", { file: rc.rcLabel }) });
+      const { backupPath } = await removeShellSourceLine(rc.rcPath);
+      await showToast({
+        style: Toast.Style.Success,
+        title: t("st.disabledIntegrationToast", { file: rc.rcLabel }),
+        message: backupPath ? t("st.rcBackupNote", { path: backupPath }) : undefined,
+      });
       await refreshConfig();
     } catch (e) {
       await showToast({
@@ -252,6 +266,9 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
       isShowingDetail={isShowingDetail}
       searchBarPlaceholder={t("st.searchPlaceholder")}
       searchBarAccessory={searchBarAccessory}
+      {...(initialSelectedId
+        ? { selectedItemId, onSelectionChange: (id: string | null) => setSelectedItemId(id ?? undefined) }
+        : {})}
     >
       {configProblem && (
         <List.Section title={t("cfg.sectionTitle")}>
@@ -304,6 +321,11 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
                   title={t("st.actionConfigHistory")}
                   icon={Icon.Clock}
                   target={<ShellConfigHistoryView currentConfig={config} onRestored={refreshConfig} />}
+                />
+                <Action.Push
+                  title={t("st.actionRcBackups", { file: rcInfo.rcLabel })}
+                  icon={Icon.SaveDocument}
+                  target={<ShellRcBackupsView rcInfo={rcInfo} />}
                 />
                 {!isShowingDetail && (
                   <Action.Push
@@ -548,6 +570,17 @@ function SnippetListItem({
             onAction={onToggleReveal}
           />
           <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+          <Action.Push
+            title={t("st.actionSnippetHistory")}
+            icon={Icon.Clock}
+            target={
+              <ShellConfigHistoryView
+                currentConfig={currentConfig}
+                onRestored={onRestored}
+                focusSnippet={{ id: item.id, name: item.name }}
+              />
+            }
+          />
           <Action.Push
             title={t("st.actionConfigHistory")}
             icon={Icon.Clock}
