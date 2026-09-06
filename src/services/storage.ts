@@ -15,6 +15,7 @@ import {
   computeFingerprint,
   generateSnapshotFilename,
   parseSnapshotFilename,
+  formatSnapshotTimestamp,
   checkSnapshotSoftLimit,
   SNAPSHOT_SOFT_LIMIT,
   ConfigFileError,
@@ -29,6 +30,9 @@ const SHELL_CONFIG_FILE = join(BASE_DIR, "shell.json");
 const SHELL_SCRIPT_FILE = join(BASE_DIR, "shell.sh");
 const SNAPSHOTS_DIR = join(BASE_DIR, "snapshots");
 const BACKUPS_DIR = join(BASE_DIR, "backups");
+// 扩展自己那两个配置文件(shell.json / registry.json)的历史。
+// 不塞进 snapshots/ 是因为那层目录是按项目名寻址的,真有个项目叫 _shell 就会撞上
+const CONFIG_HISTORY_DIR = join(BASE_DIR, "config-history");
 
 export function getBaseDir(): string {
   return BASE_DIR;
@@ -81,6 +85,129 @@ export async function writeFileAtomic(filePath: string, content: string, explici
     }
     throw e;
   }
+}
+
+/**
+ * 时间戳只精确到秒,同一秒内连续保存(快速切开关、连按上移)会撞名,
+ * 直接写就会把上一份历史覆盖掉。撞上就在时间戳后面补 -2 / -3。
+ */
+async function uniqueSnapshotPath(dir: string, filename: string): Promise<string> {
+  const first = join(dir, filename);
+  if (!existsSync(first)) return first;
+
+  const dot = filename.indexOf(".");
+  const stamp = dot < 0 ? filename : filename.slice(0, dot);
+  const rest = dot < 0 ? "" : filename.slice(dot);
+  for (let i = 2; i < 1000; i++) {
+    const candidate = join(dir, `${stamp}-${i}${rest}`);
+    if (!existsSync(candidate)) return candidate;
+  }
+  return first;
+}
+
+/** 扩展自己的两份配置文件,各自有一条历史线 */
+export type ConfigKind = "shell" | "registry";
+
+export interface ConfigSnapshotItem {
+  filename: string;
+  filePath: string;
+  /** 形如 2026-09-06-094028 */
+  timestampStr: string;
+  size: number;
+  mtime: Date;
+}
+
+export interface ConfigSnapshotResult {
+  /** 本次是否真的打了快照(内容没变就不打) */
+  taken: boolean;
+  snapshotCount?: number;
+  snapshotLimitExceeded?: boolean;
+  snapshotLimit?: number;
+}
+
+function configHistoryDir(kind: ConfigKind): string {
+  return join(CONFIG_HISTORY_DIR, kind);
+}
+
+function configFileName(kind: ConfigKind): string {
+  return kind === "shell" ? "shell.json" : "registry.json";
+}
+
+/**
+ * 写入前把旧内容存一份。
+ *
+ * 为什么 Shell 轨比项目轨更需要这个:.env 至少可能在 git 里有副本,
+ * 而片段只存在 shell.json 这一处,改错、删错都没有任何退路。
+ * 内容没变就不打,避免反复切同一个开关把历史灌满。
+ */
+async function snapshotConfigBeforeWrite(
+  kind: ConfigKind,
+  filePath: string,
+  nextContent: string,
+): Promise<ConfigSnapshotResult> {
+  if (!existsSync(filePath)) return { taken: false };
+
+  let oldContent: string;
+  try {
+    oldContent = await readFile(filePath, "utf8");
+  } catch {
+    return { taken: false };
+  }
+  if (oldContent === nextContent) return { taken: false };
+
+  const dir = configHistoryDir(kind);
+  try {
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    const snapshotPath = await uniqueSnapshotPath(dir, `${formatSnapshotTimestamp()}.${configFileName(kind)}`);
+    await writeFileAtomic(snapshotPath, oldContent);
+
+    const entries = await readdir(dir, { withFileTypes: true });
+    const count = entries.filter((e) => e.isFile()).length;
+    return {
+      taken: true,
+      snapshotCount: count,
+      snapshotLimitExceeded: checkSnapshotSoftLimit(count).exceeded,
+      snapshotLimit: SNAPSHOT_SOFT_LIMIT,
+    };
+  } catch {
+    // 存不下历史不该拖累这次保存本身
+    return { taken: false };
+  }
+}
+
+/** 某份配置的历史列表,最新在前 */
+export async function listConfigSnapshots(kind: ConfigKind): Promise<ConfigSnapshotItem[]> {
+  const dir = configHistoryDir(kind);
+  if (!existsSync(dir)) return [];
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const items: ConfigSnapshotItem[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const match = /^(\d{4}-\d{2}-\d{2}-\d{6})(?:-\d+)?\./.exec(entry.name);
+      if (!match?.[1]) continue;
+      const filePath = join(dir, entry.name);
+      const fileStat = await stat(filePath);
+      items.push({
+        filename: entry.name,
+        filePath,
+        timestampStr: match[1],
+        size: fileStat.size,
+        mtime: fileStat.mtime,
+      });
+    }
+    return items.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+  } catch {
+    return [];
+  }
+}
+
+export async function readConfigSnapshot(filePath: string): Promise<string> {
+  return readFile(filePath, "utf8");
+}
+
+export async function deleteConfigSnapshot(filePath: string): Promise<void> {
+  if (existsSync(filePath)) await unlink(filePath);
 }
 
 /** 配置文件读不出来时的情况说明,交给界面告诉用户发生了什么 */
@@ -304,9 +431,12 @@ export async function loadRegistry(): Promise<LoadResult<RegistryData>> {
 /**
  * 保存项目注册表
  */
-export async function saveRegistry(registry: RegistryData): Promise<void> {
+export async function saveRegistry(registry: RegistryData): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
-  await writeFileAtomic(REGISTRY_FILE, formatRegistry(registry));
+  const next = formatRegistry(registry);
+  const snapshot = await snapshotConfigBeforeWrite("registry", REGISTRY_FILE, next);
+  await writeFileAtomic(REGISTRY_FILE, next);
+  return snapshot;
 }
 
 /**
@@ -340,13 +470,16 @@ export async function loadShellConfig(): Promise<LoadResult<ShellConfig>> {
 /**
  * 保存 Shell 配置并同步生成 ~/.env-butler/shell.sh (设置可执行权限)
  */
-export async function saveShellConfig(config: ShellConfig): Promise<void> {
+export async function saveShellConfig(config: ShellConfig): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
-  await writeFileAtomic(SHELL_CONFIG_FILE, formatShellConfig(config));
+  const next = formatShellConfig(config);
+  const snapshot = await snapshotConfigBeforeWrite("shell", SHELL_CONFIG_FILE, next);
+  await writeFileAtomic(SHELL_CONFIG_FILE, next);
   const scriptContent = generateShellScript(config.snippets);
   // shell.sh 必须显式带上可执行位:走临时文件 + rename 的话权限跟的是临时文件,
   // 不显式指定就会丢掉 0o755
   await writeFileAtomic(SHELL_SCRIPT_FILE, scriptContent, 0o755);
+  return snapshot;
 }
 
 /**
@@ -472,7 +605,7 @@ export async function writeEnvFileWithSnapshot(options: {
     }
 
     const snapshotFilename = generateSnapshotFilename(basename(envFilePath));
-    snapshotPath = join(projectSnapshotDir, snapshotFilename);
+    snapshotPath = await uniqueSnapshotPath(projectSnapshotDir, snapshotFilename);
     await writeFileAtomic(snapshotPath, oldContent);
 
     // 打完快照后数一下这个项目累计了多少份。超过软上限只是提示用户按需清理,

@@ -11,6 +11,20 @@ interface EditShellSnippetFormProps {
   onSave: (data: Omit<ShellSnippet, "id">) => Promise<void>;
 }
 
+/**
+ * 每种类型的起手式。
+ *
+ * 「类型」这个字段的本意就是**新建预设**——当初决定"alias 不做独立模块,
+ * 作为片段的一种类型"(设计决议 §三),靠的就是选类型时给出对应的写法,
+ * 用一个字段替代一整个模块。之前只实现了"事后挑毛病"的类型校验,
+ * 却漏了"事前给范例"这一半,所以选 alias 也只看到 export 的示例。
+ */
+const SNIPPET_TEMPLATES: Record<ShellSnippetType, string> = {
+  export: 'export MY_VAR="value"',
+  alias: 'alias ll="ls -la"',
+  snippet: ["# 任意 shell 代码,会原样写进 shell.sh", "mkcd() {", '  mkdir -p "$1" && cd "$1"', "}"].join("\n"),
+};
+
 export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShellSnippetFormProps) {
   const { pop } = useNavigation();
 
@@ -19,17 +33,18 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
   const [content, setContent] = useState(initialData?.content ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [enabled, setEnabled] = useState(initialData?.enabled ?? true);
+  const [containsSecret, setContainsSecret] = useState(initialData?.containsSecret ?? false);
   const [nameError, setNameError] = useState<string | undefined>();
   const [contentError, setContentError] = useState<string | undefined>();
 
   const handleTypeChange = (newType: string) => {
     const nextType = newType as ShellSnippetType;
     setType(nextType);
-    // 自动给出模板提示
-    if (!content) {
-      if (nextType === "export") setContent('export MY_VAR="value"');
-      else if (nextType === "alias") setContent('alias my_cmd="command"');
-    }
+    // 内容为空、或者还停在某个类型的示例上时,换成新类型的示例。
+    // 判断"是不是还停在示例上"才能让来回切类型都拿到对的起手式,
+    // 同时绝不会覆盖用户真正写过的东西
+    const isUntouched = content.trim() === "" || Object.values(SNIPPET_TEMPLATES).includes(content);
+    if (isUntouched) setContent(SNIPPET_TEMPLATES[nextType]);
   };
 
   // 内容跟声明的类型对不上时,给一个不阻止保存的温和提示(export/alias 才检查,snippet 类型不限制)
@@ -65,6 +80,7 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
         name: trimmedName,
         type,
         content: trimmedContent,
+        containsSecret,
         description: description.trim() || undefined,
         enabled,
       });
@@ -111,7 +127,7 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
       <Form.TextArea
         id="content"
         title={t("es.contentTitle")}
-        placeholder='export JAVA_HOME="/Library/Java/Home"'
+        placeholder={SNIPPET_TEMPLATES[type]}
         value={content}
         onChange={(val) => {
           setContent(val);
@@ -128,6 +144,12 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
         onChange={setDescription}
       />
       <Form.Checkbox id="enabled" label={t("es.enabledLabel")} value={enabled} onChange={setEnabled} />
+      <Form.Checkbox
+        id="containsSecret"
+        label={t("es.containsSecretLabel")}
+        value={containsSecret}
+        onChange={setContainsSecret}
+      />
     </Form>
   );
 }

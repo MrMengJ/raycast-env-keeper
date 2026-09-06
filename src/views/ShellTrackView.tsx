@@ -16,12 +16,13 @@ import {
   type ShellConfig,
   type ShellSnippet,
   addShellSnippet,
+  maskShellContent,
   moveShellSnippet,
   removeShellSnippet,
   toggleShellSnippet,
   updateShellSnippet,
 } from "@env-butler/core";
-import { t } from "../i18n.js";
+import { snapshotLimitHint, t } from "../i18n.js";
 import type { ValidatableShell } from "../services/shellValidator.js";
 import {
   appendShellSourceLine,
@@ -35,6 +36,7 @@ import {
   type ShellRcInfo,
 } from "../services/storage.js";
 import { ConfigProblemItem } from "./ConfigProblemItem.js";
+import { ShellConfigHistoryView } from "./ShellConfigHistoryView.js";
 import { EditShellSnippetForm } from "./EditShellSnippetForm.js";
 
 interface ShellTrackViewProps {
@@ -50,6 +52,8 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
   const [loading, setLoading] = useState(true);
   const [rcInfo, setRcInfo] = useState<ShellRcInfo | null>(null);
   const [configProblem, setConfigProblem] = useState<ConfigLoadProblem | undefined>();
+  // 片段内容默认打码,和项目轨的行为对齐;需要看明文时手动切开
+  const [revealSecrets, setRevealSecrets] = useState(false);
 
   const refreshConfig = async () => {
     setLoading(true);
@@ -130,23 +134,35 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
 
   const handleToggle = async (id: string) => {
     const updated = toggleShellSnippet(config, id);
-    await saveShellConfig(updated);
+    const snapshot = await saveShellConfig(updated);
     setConfig(updated);
-    await showToast({ style: Toast.Style.Success, title: t("st.toggledToast") });
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.toggledToast"),
+      message: snapshotLimitHint(snapshot),
+    });
   };
 
   const handleAdd = async (data: Omit<ShellSnippet, "id">) => {
     const { config: updated } = addShellSnippet(config, data);
-    await saveShellConfig(updated);
+    const snapshot = await saveShellConfig(updated);
     setConfig(updated);
-    await showToast({ style: Toast.Style.Success, title: t("st.addedToast") });
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.addedToast"),
+      message: snapshotLimitHint(snapshot),
+    });
   };
 
   const handleEdit = async (id: string, data: Omit<ShellSnippet, "id">) => {
     const updated = updateShellSnippet(config, id, data);
-    await saveShellConfig(updated);
+    const snapshot = await saveShellConfig(updated);
     setConfig(updated);
-    await showToast({ style: Toast.Style.Success, title: t("st.updatedToast") });
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.updatedToast"),
+      message: snapshotLimitHint(snapshot),
+    });
   };
 
   // 调整片段在 shell.sh 里的先后。列表是按类型分组显示的,分组顺序跟文件里的真实顺序对不上,
@@ -178,9 +194,13 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
     if (!confirmed) return;
 
     const updated = removeShellSnippet(config, item.id);
-    await saveShellConfig(updated);
+    const snapshot = await saveShellConfig(updated);
     setConfig(updated);
-    await showToast({ style: Toast.Style.Success, title: t("st.deletedToast") });
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.deletedToast"),
+      message: snapshotLimitHint(snapshot),
+    });
   };
 
   const shellPath = getShellScriptPath();
@@ -205,6 +225,10 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
       onDelete={handleDelete}
       onAdd={handleAdd}
       onMove={handleMove}
+      revealSecrets={revealSecrets}
+      onToggleReveal={() => setRevealSecrets((v) => !v)}
+      currentConfig={config}
+      onRestored={refreshConfig}
     />
   );
 
@@ -274,6 +298,11 @@ export function ShellTrackView({ searchBarAccessory }: ShellTrackViewProps) {
                 )}
                 <Action.CopyToClipboard title={t("st.copySourceCommand")} content={sourceLine} />
                 <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+                <Action.Push
+                  title={t("st.actionConfigHistory")}
+                  icon={Icon.Clock}
+                  target={<ShellConfigHistoryView currentConfig={config} onRestored={refreshConfig} />}
+                />
                 {!isShowingDetail && (
                   <Action.Push
                     title={t("st.bootstrapLearnMore")}
@@ -349,6 +378,8 @@ function snippetTypeLabel(type: ShellSnippet["type"]): string {
 // 生成文件的预览页:列表按类型分组,看不出真实先后,这里把 shell.sh 原样摊开
 function ShellScriptPreview() {
   const [content, setContent] = useState<string | null>(null);
+  // 预览页展示的是完整的 shell.sh,里面同样可能有密钥,默认打码
+  const [reveal, setReveal] = useState(false);
   const scriptPath = getShellScriptPath();
 
   useEffect(() => {
@@ -368,7 +399,7 @@ function ShellScriptPreview() {
             "---",
             "",
             "```bash",
-            content,
+            reveal ? content : maskShellContent(content),
             "```",
           ].join("\n");
   }
@@ -381,6 +412,11 @@ function ShellScriptPreview() {
       actions={
         content ? (
           <ActionPanel>
+            <Action
+              title={reveal ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
+              icon={reveal ? Icon.EyeDisabled : Icon.Eye}
+              onAction={() => setReveal((v) => !v)}
+            />
             <Action.CopyToClipboard title={t("st.previewCopy")} content={content} concealed />
           </ActionPanel>
         ) : undefined
@@ -390,7 +426,12 @@ function ShellScriptPreview() {
 }
 
 // 详情面板内容:元信息(类型/状态/排列顺序/备注) + 完整代码,不用再进编辑表单才能看全
-function buildSnippetDetailMarkdown(item: ShellSnippet, orderIndex: number, orderTotal: number): string {
+function buildSnippetDetailMarkdown(
+  item: ShellSnippet,
+  orderIndex: number,
+  orderTotal: number,
+  revealSecrets: boolean,
+): string {
   const statusLabel = item.enabled ? t("st.enabledTag") : t("st.disabledTag");
   const descriptionLabel = item.description || t("st.detailNone");
 
@@ -409,7 +450,7 @@ function buildSnippetDetailMarkdown(item: ShellSnippet, orderIndex: number, orde
 ---
 
 \`\`\`bash
-${item.content}
+${revealSecrets ? item.content : maskShellContent(item.content, { maskAll: item.containsSecret })}
 \`\`\``;
 }
 
@@ -423,6 +464,10 @@ function SnippetListItem({
   onDelete,
   onAdd,
   onMove,
+  revealSecrets,
+  onToggleReveal,
+  currentConfig,
+  onRestored,
 }: {
   item: ShellSnippet;
   /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
@@ -434,6 +479,10 @@ function SnippetListItem({
   onDelete: (item: ShellSnippet) => void;
   onAdd: (data: Omit<ShellSnippet, "id">) => Promise<void>;
   onMove: (id: string, direction: "up" | "down") => void;
+  revealSecrets: boolean;
+  onToggleReveal: () => void;
+  currentConfig: ShellConfig;
+  onRestored: () => void;
 }) {
   return (
     <List.Item
@@ -447,10 +496,13 @@ function SnippetListItem({
           : { source: Icon.Pause, tintColor: Color.SecondaryText }
       }
       accessories={[
+        ...(item.containsSecret
+          ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("st.secretTag") }]
+          : []),
         // 带 # 前缀,免得裸数字被误读成"几项"(分组标题上已经在用裸数字表示数量)
         { tag: { value: `#${orderIndex}`, color: Color.SecondaryText }, tooltip: t("st.orderTooltip") },
       ]}
-      detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal)} />}
+      detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal, revealSecrets)} />}
       actions={
         <ActionPanel>
           <Action
@@ -488,7 +540,17 @@ function SnippetListItem({
               onAction={() => onMove(item.id, "down")}
             />
           )}
+          <Action
+            title={revealSecrets ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
+            icon={revealSecrets ? Icon.EyeDisabled : Icon.Eye}
+            onAction={onToggleReveal}
+          />
           <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+          <Action.Push
+            title={t("st.actionConfigHistory")}
+            icon={Icon.Clock}
+            target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
+          />
           <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
           <Action
             title={t("st.actionDelete")}
