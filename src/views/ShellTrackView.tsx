@@ -420,6 +420,13 @@ function SnippetListItem({
     <List.Item
       id={item.id}
       title={item.name}
+      accessories={[
+        // 顺序号在左、状态在右:accessories 整体右对齐,放最后的状态图标会落在同一条竖线上,一列扫下来最快
+        { tag: { value: `${orderIndex}/${orderTotal}`, color: Color.SecondaryText }, tooltip: t("st.orderTooltip") },
+        item.enabled
+          ? { icon: { source: Icon.CheckCircle, tintColor: Color.Green }, tooltip: t("st.enabledTag") }
+          : { icon: { source: Icon.Pause, tintColor: Color.SecondaryText }, tooltip: t("st.disabledTag") },
+      ]}
       detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal)} />}
       actions={
         <ActionPanel>

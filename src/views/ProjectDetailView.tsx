@@ -186,6 +186,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
     updatedLines = addEnvVariable(updatedLines, data.key, data.value, {
       quote: data.quote,
       disabled: data.disabled,
+      comment: data.comment,
     });
 
     // 如果用户在表单里勾选了自定义敏感
@@ -347,6 +348,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                   ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("pd.lockTooltip") }]
                   : []),
                 ...(kv.quote ? [{ tag: { value: kv.quote === '"' ? '""' : "''", color: Color.SecondaryText } }] : []),
+                ...(kv.comment ? [{ icon: Icon.SpeechBubble, tooltip: kv.comment }] : []),
               ]}
               actions={
                 <ActionPanel>
@@ -374,6 +376,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                             value: kv.value,
                             quote: kv.quote,
                             disabled: kv.disabled,
+                            comment: kv.comment,
                           }}
                           customSecrets={currentProject.customSecrets}
                           onSave={(data) => handleSaveVariable(data, kv.key)}
@@ -491,6 +494,7 @@ export function ProjectDetailView({ project, onProjectUpdated }: ProjectDetailVi
                           value: kv.value,
                           quote: kv.quote,
                           disabled: kv.disabled,
+                          comment: kv.comment,
                         }}
                         customSecrets={currentProject.customSecrets}
                         onSave={(data) => handleSaveVariable(data, kv.key)}

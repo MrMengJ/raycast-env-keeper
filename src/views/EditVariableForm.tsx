@@ -9,6 +9,8 @@ export interface VariableFormData {
   quote: "'" | '"' | null;
   disabled: boolean;
   isSecret: boolean;
+  /** 行内注释正文(不含 `#`);空串表示不要注释 */
+  comment: string;
 }
 
 interface EditVariableFormProps {
@@ -17,6 +19,7 @@ interface EditVariableFormProps {
     value: string;
     quote: "'" | '"' | null;
     disabled: boolean;
+    comment?: string;
   };
   customSecrets?: string[];
   onSave: (data: VariableFormData) => Promise<void>;
@@ -32,6 +35,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
     initialData?.quote === '"' ? "double" : initialData?.quote === "'" ? "single" : "none",
   );
   const [disabled, setDisabled] = useState(initialData?.disabled ?? false);
+  const [comment, setComment] = useState(initialData?.comment ?? "");
 
   const isDefaultSecret = isSecretKey(key, customSecrets);
   const [customSecretChecked, setCustomSecretChecked] = useState(isDefaultSecret);
@@ -69,6 +73,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
         quote,
         disabled,
         isSecret: customSecretChecked,
+        comment: comment.trim(),
       });
       pop();
     } catch (e) {
@@ -120,6 +125,14 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
           onChange={setConfirmOverrideEncrypted}
         />
       )}
+      <Form.TextField
+        id="comment"
+        title={t("ev.commentTitle")}
+        placeholder={t("ev.commentPlaceholder")}
+        info={t("ev.commentInfo")}
+        value={comment}
+        onChange={setComment}
+      />
       <Form.Dropdown
         id="quote"
         title={t("ev.quoteTitle")}
