@@ -148,9 +148,26 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
       return;
     }
 
+    // 在"某个片段的变更历史"里点恢复,恢复的仍然是**整份配置**——
+    // 页面标题只提一个片段,动作却会把别的片段一起带回去,这是最容易伤到人的地方,
+    // 所以确认框里必须点名还有哪些片段会跟着变
+    const alsoAffected = focusSnippet
+      ? diffShellSnippets(currentConfig.snippets, config.snippets)
+          .filter((e) => e.type !== "unchanged" && e.id !== focusSnippet.id)
+          .map((e) => e.name)
+      : [];
+
     const confirmed = await confirmAlert({
       title: t("sch.restoreConfirmTitle", { time: item.timestampStr }),
-      message: t("sch.restoreConfirmMessage"),
+      message: !focusSnippet
+        ? t("sch.restoreConfirmMessage")
+        : alsoAffected.length === 0
+          ? t("sch.focusRestoreOnlyThis", { name: focusSnippet.name })
+          : t("sch.focusRestoreAlsoAffects", {
+              name: focusSnippet.name,
+              others: alsoAffected.join("、"),
+              count: alsoAffected.length,
+            }),
       primaryAction: { title: t("sch.restoreConfirmAction"), style: Alert.ActionStyle.Destructive },
       dismissAction: { title: t("common.cancel") },
     });
@@ -291,7 +308,11 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
             detail={<List.Item.Detail markdown={selectedId === item.filename ? buildMarkdown(item) : ""} />}
             actions={
               <ActionPanel>
-                <Action title={t("sch.actionRestore")} icon={Icon.Undo} onAction={() => handleRestore(item)} />
+                <Action
+                  title={focusSnippet ? t("sch.focusActionRestore") : t("sch.actionRestore")}
+                  icon={Icon.Undo}
+                  onAction={() => handleRestore(item)}
+                />
                 {/* 配置里可能带明文密钥,不该留在 Raycast 的剪贴板历史里被搜到 */}
                 <Action.CopyToClipboard title={t("sch.actionCopy")} content={previewText} concealed />
                 <Action

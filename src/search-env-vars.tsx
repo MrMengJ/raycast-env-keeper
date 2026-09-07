@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
   extractShellAssignments,
+  formatKVRaw,
   isEncryptedValue,
   isSecretKey,
   maskSecret,
@@ -18,6 +19,9 @@ interface MatchedVariable {
   key: string;
   value: string;
   disabled: boolean;
+  /** 复制整行时要照着原样拼:项目轨有引号形态和行内注释,Shell 轨没有 */
+  quote?: "'" | '"' | null;
+  comment?: string;
   /** 展示用的来源:项目名 或 Shell 轨的片段名 */
   sourceLabel: string;
   /** 项目轨才有;Shell 轨的变量没有对应文件 */
@@ -59,6 +63,8 @@ export default function Command() {
                       key: l.key,
                       value: l.value,
                       disabled: l.disabled,
+                      quote: l.quote,
+                      comment: l.comment,
                       sourceLabel: `${project.name} / ${f}`,
                       project,
                       envFilePath: fullPath,
@@ -177,6 +183,18 @@ export default function Command() {
                   )}
                   <Action.CopyToClipboard title={t("search.actionCopyValue")} content={item.value} concealed />
                   <Action.CopyToClipboard title={t("search.actionCopyKey")} content={item.key} />
+                  <Action.CopyToClipboard
+                    title={t("pd.actionCopyPair")}
+                    content={formatKVRaw(item.key, item.value, {
+                      quote: item.quote ?? null,
+                      comment: item.comment,
+                      // 项目轨的"禁用"就是注释掉那一行,照原样带上 #;
+                      // Shell 轨的"禁用"是整个片段不生成,行本身并没有被注释
+                      disabled: Boolean(item.project) && item.disabled,
+                      end: "",
+                    })}
+                    concealed
+                  />
                   {item.envFilePath && <Action.OpenWith title={t("mv.actionOpenWith")} path={item.envFilePath} />}
                 </ActionPanel>
               }

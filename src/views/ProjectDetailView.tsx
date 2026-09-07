@@ -606,6 +606,17 @@ export function ProjectDetailView({
                     )}
                     <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
+                    {/* 照着文件里的样子复制:这一行本来就是注释掉的,带着 # 才是"整行" */}
+                    <Action.CopyToClipboard
+                      title={t("pd.actionCopyPair")}
+                      content={formatKVRaw(kv.key, kv.value, {
+                        quote: kv.quote,
+                        comment: kv.comment,
+                        disabled: true,
+                        end: "",
+                      })}
+                      concealed
+                    />
                     <Action.Push
                       title={t("pd.actionEdit")}
                       icon={Icon.Pencil}

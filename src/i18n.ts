@@ -242,6 +242,11 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "sch.focusEmptyDesc": "从下一次改动开始，这个片段的每次变化都会出现在这里",
   "sch.focusAbsent": "这一版里还没有这个片段",
   "sch.focusUnchanged": "这个片段没有变化",
+  "sch.focusActionRestore": "恢复整份配置到这一版",
+  "sch.focusRestoreOnlyThis":
+    "恢复的是整份 Shell 配置，不只是「{name}」。不过这一版里其他片段跟现在一样，所以这次只会影响「{name}」。新开一个终端窗口后生效。",
+  "sch.focusRestoreAlsoAffects":
+    "恢复的是整份 Shell 配置，不只是「{name}」。另外这 {count} 个片段也会跟着变回这一版：{others}。新开一个终端窗口后生效。",
   "st.detailOrder": "排列顺序",
   "st.detailOrderValue": "第 {index} / {total} 位",
   "st.bootstrapSection": "Shell 集成",
@@ -688,6 +693,11 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "sch.focusEmptyDesc": "From the next edit on, every change to this snippet shows up here",
   "sch.focusAbsent": "This snippet did not exist in this version yet",
   "sch.focusUnchanged": "This snippet did not change",
+  "sch.focusActionRestore": "Restore Whole Config to This Version",
+  "sch.focusRestoreOnlyThis":
+    'This restores the whole Shell config, not just "{name}". In this version every other snippet matches what you have now, so only "{name}" changes. Open a new terminal window for it to take effect.',
+  "sch.focusRestoreAlsoAffects":
+    'This restores the whole Shell config, not just "{name}". These {count} snippets go back to this version too: {others}. Open a new terminal window for it to take effect.',
   "st.detailOrder": "Position",
   "st.detailOrderValue": "{index} of {total}",
   "st.bootstrapSection": "Shell Integration",
