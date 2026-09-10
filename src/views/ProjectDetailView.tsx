@@ -24,6 +24,7 @@ import {
   removeEnvVariable,
   toggleEnvVariable,
   mergeExampleEnv,
+  generateExampleEnv,
   isSecretKey,
   formatKVRaw,
   isEncryptedValue,
@@ -31,18 +32,37 @@ import {
   type ProjectMeta,
   setEnvrcNoticeDismissed,
   toggleProjectSecret,
+  type Preset,
+  type PresetsFile,
+  addPreset,
+  clearPresetApplied,
+  createEmptyPresetsFile,
+  detectPresetDrift,
+  groupPresets,
+  listPresetGroups,
+  listPresetsForProject,
+  recordPresetApplied,
+  updatePreset,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import {
+  type ConfigLoadProblem,
   checkEnvrcExists,
   detectProjectEnvFiles,
+  loadPresets,
   loadRegistry,
   readEnvFile,
+  savePresets,
   saveRegistry,
   writeEnvFileWithSnapshot,
 } from "../services/storage.js";
+import { ConfigProblemItem } from "./ConfigProblemItem.js";
 import { CreateEnvFileForm } from "./CreateEnvFileForm.js";
 import { EditVariableForm, type VariableFormData } from "./EditVariableForm.js";
+import { PresetDiffView } from "./PresetDiffView.js";
+import { PresetMetaForm, type PresetMetaData } from "./PresetMetaForm.js";
+import { PresetsView } from "./PresetsView.js";
+import { RawContentForm } from "./RawContentForm.js";
 import { SnapshotHistoryView } from "./SnapshotHistoryView.js";
 
 interface ProjectDetailViewProps {
@@ -80,8 +100,16 @@ export function ProjectDetailView({
   const [loading, setLoading] = useState(true);
   const [hasEnvrc, setHasEnvrc] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [presetsFile, setPresetsFile] = useState<PresetsFile>(createEmptyPresetsFile());
+  const [presetsProblem, setPresetsProblem] = useState<ConfigLoadProblem | undefined>();
 
   const currentEnvFilePath = join(currentProject.path, selectedEnvFile);
+
+  const loadPresetsState = async () => {
+    const result = await loadPresets();
+    setPresetsFile(result.data);
+    setPresetsProblem(result.problem);
+  };
 
   // 初始化探测环境文件与 .envrc(若用户已针对本项目关闭提示,则即使检测到也不再展示)
   const refreshEnvFiles = async () => {
@@ -114,6 +142,7 @@ export function ProjectDetailView({
 
   useEffect(() => {
     refreshEnvFiles();
+    loadPresetsState();
   }, [currentProject.path]);
 
   useEffect(() => {
@@ -336,6 +365,232 @@ export function ProjectDetailView({
     });
   };
 
+  // 新建出来的环境文件是空的,不知道该填什么——从另一个已有文件借内容过来。
+  // "结构"模式复用 generateExampleEnv:只留 KEY 和注释,值清空,不会把密钥搬错环境;
+  // "完整"模式原样搬运,连值一起复制,图的是同一批本地值本来就不用改
+  const handleFillFromReference = async (sourceFile: string, mode: "structure" | "full") => {
+    try {
+      const { content: sourceContent } = await readEnvFile(join(currentProject.path, sourceFile));
+      const newContent = mode === "structure" ? generateExampleEnv(parseEnv(sourceContent)) : sourceContent;
+
+      const result = await writeEnvFileWithSnapshot({
+        projectName: currentProject.name,
+        envFilePath: currentEnvFilePath,
+        newContent,
+        force: true,
+      });
+      await loadCurrentEnvContent();
+      await showToast({
+        style: Toast.Style.Success,
+        title:
+          mode === "structure"
+            ? t("pd.fillStructureSuccessToast", { file: sourceFile })
+            : t("pd.fillFullSuccessToast", { file: sourceFile }),
+        message: snapshotLimitHint(result),
+      });
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("pd.fillFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  // ---- 方案(设计决议 §十一)----
+
+  const currentContent = serializeEnv(lines);
+  const projectPresets = listPresetsForProject(presetsFile, currentProject.id);
+  const presetGroups = listPresetGroups(presetsFile, currentProject.id);
+  // 文件还没读完时 lines 是空的,这时候比对只会得出"跟一份空方案一致"或"漂移了"的假结果
+  /** 内容跟当前文件一模一样的那份,打「当前生效」 */
+  const activeIds = new Set(loading ? [] : projectPresets.filter((p) => p.content === currentContent).map((p) => p.id));
+  /** 上次套用了某份方案,但现在两边对不上了 */
+  const driftPreset = loading
+    ? undefined
+    : detectPresetDrift(presetsFile, currentProject.id, selectedEnvFile, currentContent);
+
+  /** 方案文件读不出来时不能写:会把还留着数据的坏文件当空的覆盖掉 */
+  const persistPresets = async (next: PresetsFile) => {
+    if (presetsProblem) throw new Error(t("cfg.corruptedTitle"));
+    await savePresets(next);
+    setPresetsFile(next);
+  };
+
+  // 整份替换,不问直接写。确认这一步由差异页承担(见 handleApplyPreset)
+  const applyPresetNow = async (preset: Preset) => {
+    try {
+      const result = await writeEnvFileWithSnapshot({
+        projectName: currentProject.name,
+        envFilePath: currentEnvFilePath,
+        newContent: preset.content,
+        force: true,
+      });
+      await loadCurrentEnvContent();
+      // 记下"这个文件现在对应哪份方案",之后手改了才判得出漂移。
+      // 方案文件本身读不出来时跳过这一步:文件已经套用成功了,不能因为记不下账就报"套用失败"
+      if (!presetsProblem) {
+        await persistPresets(recordPresetApplied(presetsFile, currentProject.id, selectedEnvFile, preset.id));
+      }
+      await showToast({
+        style: Toast.Style.Success,
+        title: t("ps.appliedToast", { name: preset.name, file: selectedEnvFile }),
+        message: snapshotLimitHint(result),
+      });
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("ps.applyFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  // 目标文件非空时,先进差异页,那一页的主动作才是真正的"套用"——
+  // "按一下就换掉一整个文件"不该在用户毫无察觉的情况下发生,而 confirmAlert 只有两个按钮、
+  // 放不下"先看差异",索性让差异页本身当确认框。文件是空的就直接套,没有任何东西会被覆盖
+  const handleApplyPreset = async (preset: Preset) => {
+    if (currentContent.trim() === "") {
+      await applyPresetNow(preset);
+      return;
+    }
+    push(
+      <PresetDiffView
+        preset={preset}
+        envFilename={selectedEnvFile}
+        currentContent={currentContent}
+        customSecrets={currentProject.customSecrets}
+        mode="apply"
+        onApply={() => applyPresetNow(preset)}
+      />,
+    );
+  };
+
+  const handleSaveAsPreset = async (data: PresetMetaData) => {
+    const { file, preset } = addPreset(presetsFile, {
+      projectId: currentProject.id,
+      name: data.name,
+      note: data.note,
+      group: data.group,
+      content: currentContent,
+    });
+    // 刚存的那份跟文件当然一致;顺手记成"已套用",之后一改就能提示漂移
+    await persistPresets(recordPresetApplied(file, currentProject.id, selectedEnvFile, preset.id));
+    await showToast({ style: Toast.Style.Success, title: t("ps.savedToast", { name: preset.name }) });
+  };
+
+  // 从零写一份,跟当前文件无关,所以不记"已套用"
+  const handleCreateBlankPreset = async (data: PresetMetaData) => {
+    const { file, preset } = addPreset(presetsFile, {
+      projectId: currentProject.id,
+      name: data.name,
+      note: data.note,
+      group: data.group,
+      content: data.content ?? "",
+    });
+    await persistPresets(file);
+    await showToast({ style: Toast.Style.Success, title: t("ps.savedToast", { name: preset.name }) });
+  };
+
+  const handleUpdatePresetFromFile = async (preset: Preset) => {
+    const confirmed = await confirmAlert({
+      title: t("ps.driftUpdateConfirmTitle", { name: preset.name, file: selectedEnvFile }),
+      message: t("ps.driftUpdateConfirmMessage"),
+      primaryAction: { title: t("ps.driftUpdateConfirmAction") },
+      dismissAction: { title: t("common.cancel") },
+    });
+    if (!confirmed) return;
+    try {
+      await persistPresets(updatePreset(presetsFile, preset.id, { content: currentContent }));
+      await showToast({ style: Toast.Style.Success, title: t("ps.updatedToast", { name: preset.name }) });
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("common.saveFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  const handleDismissDrift = async () => {
+    try {
+      await persistPresets(clearPresetApplied(presetsFile, currentProject.id, selectedEnvFile));
+      await showToast({ style: Toast.Style.Success, title: t("ps.driftDismissedToast") });
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("common.saveFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  /** 方案相关的一组动作,启用区、禁用区、空列表三处共用 */
+  const presetActions = (
+    <ActionPanel.Section title={t("ps.sectionTitle")}>
+      {projectPresets.length > 0 && (
+        <ActionPanel.Submenu title={t("ps.applyMenuTitle")} icon={Icon.Replace}>
+          {groupPresets(projectPresets).map((bucket) => (
+            <ActionPanel.Section key={bucket.group ?? "__ungrouped__"} title={bucket.group ?? t("ps.ungroupedSection")}>
+              {bucket.presets.map((preset) => (
+                <Action
+                  key={preset.id}
+                  title={activeIds.has(preset.id) ? `${preset.name}  ${t("ps.liveTag")}` : preset.name}
+                  icon={activeIds.has(preset.id) ? { source: Icon.CheckCircle, tintColor: Color.Green } : Icon.Box}
+                  onAction={() => handleApplyPreset(preset)}
+                />
+              ))}
+            </ActionPanel.Section>
+          ))}
+        </ActionPanel.Submenu>
+      )}
+      <Action.Push
+        title={t("ps.saveAsNew")}
+        icon={Icon.SaveDocument}
+        shortcut={Keyboard.Shortcut.Common.Save}
+        target={
+          <PresetMetaForm
+            existingGroups={presetGroups}
+            contentPreview={{
+              content: currentContent,
+              sourceFile: selectedEnvFile,
+              customSecrets: currentProject.customSecrets,
+            }}
+            onSave={handleSaveAsPreset}
+          />
+        }
+      />
+      <Action.Push
+        title={t("ps.createBlank")}
+        icon={Icon.NewDocument}
+        target={
+          <PresetMetaForm
+            navTitle={t("ps.createBlank")}
+            existingGroups={presetGroups}
+            editableContent
+            onSave={handleCreateBlankPreset}
+          />
+        }
+      />
+      <Action.Push
+        title={t("ps.manage")}
+        icon={Icon.Box}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "p" }}
+        target={
+          <PresetsView
+            projectId={currentProject.id}
+            projectName={currentProject.name}
+            envFilename={selectedEnvFile}
+            currentContent={currentContent}
+            customSecrets={currentProject.customSecrets}
+            onApply={applyPresetNow}
+            onChanged={loadPresetsState}
+          />
+        }
+      />
+    </ActionPanel.Section>
+  );
+
   // 切换敏感明文显示
   const toggleRevealKey = (key: string) => {
     setRevealedKeys((prev) => {
@@ -352,6 +607,17 @@ export function ProjectDetailView({
   const kvLines = lines.filter((l): l is Extract<EnvLine, { type: "kv" }> => l.type === "kv");
   const enabledKvs = kvLines.filter((l) => !l.disabled);
   const disabledKvs = kvLines.filter((l) => l.disabled);
+
+  // 能借内容的候选文件:必须是磁盘上真实存在的(envFiles 里的 ".env" 可能只是探测逻辑
+  // 塞进去的占位项,文件本身还不存在),且不能是当前正在看的这个空文件自己
+  const otherExistingEnvFiles = envFiles.filter(
+    (f) => f !== selectedEnvFile && existsSync(join(currentProject.path, f)),
+  );
+  // .env.example 本身就没有真实值,只适合出现在"参考结构"里——放进"完整复制(含真实值)"
+  // 会跟菜单文案对不上,让人以为漏填了什么
+  const hasExample = existsSync(join(currentProject.path, ".env.example"));
+  const structureCandidates = hasExample ? [".env.example", ...otherExistingEnvFiles] : otherExistingEnvFiles;
+  const fullCopyCandidates = otherExistingEnvFiles;
 
   return (
     <List
@@ -416,6 +682,46 @@ export function ProjectDetailView({
                   target={<Detail markdown={t("pd.envrcDetailMarkdown")} navigationTitle={t("pd.envrcTitle")} />}
                 />
                 <Action title={t("pd.envrcDismiss")} icon={Icon.EyeDisabled} onAction={handleDismissEnvrc} />
+              </ActionPanel>
+            }
+          />
+        </List.Section>
+      )}
+
+      {presetsProblem && (
+        <List.Section title={t("cfg.sectionTitle")}>
+          <ConfigProblemItem problem={presetsProblem} />
+        </List.Section>
+      )}
+
+      {driftPreset && (
+        <List.Section title={t("ps.sectionTitle")}>
+          <List.Item
+            icon={{ source: Icon.ExclamationMark, tintColor: Color.Orange }}
+            title={t("ps.driftTitle", { name: driftPreset.name, file: selectedEnvFile })}
+            subtitle={t("ps.driftSubtitle")}
+            actions={
+              <ActionPanel>
+                <Action.Push
+                  title={t("ps.driftViewDiff")}
+                  icon={Icon.Layers}
+                  target={
+                    <PresetDiffView
+                      preset={driftPreset}
+                      envFilename={selectedEnvFile}
+                      currentContent={currentContent}
+                      customSecrets={currentProject.customSecrets}
+                      mode="drift"
+                    />
+                  }
+                />
+                <Action
+                  title={t("ps.driftUpdatePreset", { name: driftPreset.name })}
+                  icon={Icon.Upload}
+                  onAction={() => handleUpdatePresetFromFile(driftPreset)}
+                />
+                <Action title={t("ps.driftDismiss")} icon={Icon.EyeDisabled} onAction={handleDismissDrift} />
+                {presetActions}
               </ActionPanel>
             }
           />
@@ -559,8 +865,23 @@ export function ProjectDetailView({
                         />
                       }
                     />
+                    <Action.Push
+                      title={t("pd.actionEditRaw")}
+                      icon={Icon.TextDocument}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+                      target={
+                        <RawContentForm
+                          navTitle={t("pd.editRawNavTitle", { file: selectedEnvFile })}
+                          initialContent={currentContent}
+                          hint={t("pd.editRawHint")}
+                          onSave={(content) => saveLines(parseEnv(content)).then(() => undefined)}
+                        />
+                      }
+                    />
                     <Action.OpenWith title={t("mv.actionOpenWith")} path={currentEnvFilePath} />
                   </ActionPanel.Section>
+
+                  {presetActions}
                 </ActionPanel>
               }
             />
@@ -642,6 +963,7 @@ export function ProjectDetailView({
                       shortcut={{ modifiers: ["cmd"], key: "backspace" }}
                       onAction={() => handleDeleteVariable(kv.key)}
                     />
+                    {presetActions}
                   </ActionPanel>
                 }
               />
@@ -666,6 +988,34 @@ export function ProjectDetailView({
                   />
                 }
               />
+              <Action.Push
+                title={t("pd.actionEditRaw")}
+                icon={Icon.TextDocument}
+                shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+                target={
+                  <RawContentForm
+                    navTitle={t("pd.editRawNavTitle", { file: selectedEnvFile })}
+                    initialContent={currentContent}
+                    hint={t("pd.editRawHint")}
+                    onSave={(content) => saveLines(parseEnv(content)).then(() => undefined)}
+                  />
+                }
+              />
+              {structureCandidates.length > 0 && (
+                <ActionPanel.Submenu title={t("pd.fillStructureMenuTitle")} icon={Icon.Document}>
+                  {structureCandidates.map((f) => (
+                    <Action key={f} title={f} onAction={() => handleFillFromReference(f, "structure")} />
+                  ))}
+                </ActionPanel.Submenu>
+              )}
+              {fullCopyCandidates.length > 0 && (
+                <ActionPanel.Submenu title={t("pd.fillFullMenuTitle")} icon={Icon.Duplicate}>
+                  {fullCopyCandidates.map((f) => (
+                    <Action key={f} title={f} onAction={() => handleFillFromReference(f, "full")} />
+                  ))}
+                </ActionPanel.Submenu>
+              )}
+              {presetActions}
               <Action.Push
                 title={t("pd.createEnvFileItem")}
                 icon={Icon.NewDocument}

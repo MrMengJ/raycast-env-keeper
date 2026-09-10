@@ -22,11 +22,17 @@ import {
   type ConfigFailureReason,
   CURRENT_REGISTRY_VERSION,
   CURRENT_SHELL_CONFIG_VERSION,
+  type PresetsFile,
+  createEmptyPresetsFile,
+  formatPresetsFile,
+  parsePresetsFile,
+  CURRENT_PRESETS_VERSION,
 } from "@env-butler/core";
 
 const BASE_DIR = join(homedir(), ".env-butler");
 const REGISTRY_FILE = join(BASE_DIR, "registry.json");
 const SHELL_CONFIG_FILE = join(BASE_DIR, "shell.json");
+const PRESETS_FILE = join(BASE_DIR, "presets.json");
 const SHELL_SCRIPT_FILE = join(BASE_DIR, "shell.sh");
 const SNAPSHOTS_DIR = join(BASE_DIR, "snapshots");
 const BACKUPS_DIR = join(BASE_DIR, "backups");
@@ -105,8 +111,8 @@ async function uniqueSnapshotPath(dir: string, filename: string): Promise<string
   return first;
 }
 
-/** 扩展自己的两份配置文件,各自有一条历史线 */
-export type ConfigKind = "shell" | "registry";
+/** 扩展自己的三份配置文件,各自有一条历史线 */
+export type ConfigKind = "shell" | "registry" | "presets";
 
 export interface ConfigSnapshotItem {
   filename: string;
@@ -130,7 +136,9 @@ function configHistoryDir(kind: ConfigKind): string {
 }
 
 function configFileName(kind: ConfigKind): string {
-  return kind === "shell" ? "shell.json" : "registry.json";
+  if (kind === "shell") return "shell.json";
+  if (kind === "presets") return "presets.json";
+  return "registry.json";
 }
 
 /**
@@ -580,6 +588,43 @@ export async function saveShellConfig(config: ShellConfig): Promise<ConfigSnapsh
   // shell.sh 必须显式带上可执行位:走临时文件 + rename 的话权限跟的是临时文件,
   // 不显式指定就会丢掉 0o755
   await writeFileAtomic(SHELL_SCRIPT_FILE, scriptContent, 0o755);
+  return snapshot;
+}
+
+/**
+ * 读取项目轨的方案。跟 shell.json 同一套路:损坏就隔离、绝不静默当空——
+ * 方案里可能装着用户唯一一份某套密钥,被空文件覆盖掉就真的没了
+ */
+export async function loadPresets(): Promise<LoadResult<PresetsFile>> {
+  await ensureStorageDirs();
+  if (!existsSync(PRESETS_FILE)) {
+    // 不像 registry / shell 那样一上来就写空文件:大多数用户可能永远不用方案,
+    // 没必要在数据目录里凭空多一个文件
+    return { data: createEmptyPresetsFile() };
+  }
+
+  let content: string;
+  try {
+    content = await readFile(PRESETS_FILE, "utf8");
+  } catch {
+    return { data: createEmptyPresetsFile() };
+  }
+
+  try {
+    return { data: parsePresetsFile(content) };
+  } catch (e) {
+    return {
+      data: createEmptyPresetsFile(),
+      problem: await quarantineConfigFile(PRESETS_FILE, e, CURRENT_PRESETS_VERSION),
+    };
+  }
+}
+
+export async function savePresets(file: PresetsFile): Promise<ConfigSnapshotResult> {
+  await ensureStorageDirs();
+  const next = formatPresetsFile(file);
+  const snapshot = await snapshotConfigBeforeWrite("presets", PRESETS_FILE, next);
+  await writeFileAtomic(PRESETS_FILE, next);
   return snapshot;
 }
 

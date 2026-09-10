@@ -1,4 +1,11 @@
-import type { EnvDiffEntry, ShellSnippetDiffEntry } from "@env-butler/core";
+import {
+  type EnvDiffEntry,
+  type ShellSnippetDiffEntry,
+  isEncryptedValue,
+  isSecretKey,
+  maskSecret,
+  parseEnv,
+} from "@env-butler/core";
 import { t } from "../i18n.js";
 
 /**
@@ -13,11 +20,44 @@ import { t } from "../i18n.js";
  *   没法上色,那是唯一能带颜色信号的办法。
  */
 
-/** 一段有方向的差异:标题 + 说明 + 正文 */
+/** 一段有方向的差异:标题 + 说明 + 正文。标题自己带方向(`A → B`),说明解释这个方向在问什么 */
+export function diffBlock(heading: string, hint: string, body: string): string {
+  return [`### ${heading}`, "", `_${hint}_`, "", body].join("\n");
+}
+
+/** 两个历史页共用的两段:上一版 → 此版本、此版本 → 当前版本 */
 export function diffSection(headingKey: "fromPrev" | "toCurrent", body: string): string {
   const heading = headingKey === "fromPrev" ? t("diff.fromPrevHeading") : t("diff.toCurrentHeading");
   const hint = headingKey === "fromPrev" ? t("diff.fromPrevHint") : t("diff.toCurrentHint");
-  return [`### ${heading}`, "", `_${hint}_`, "", body].join("\n");
+  return diffBlock(heading, hint, body);
+}
+
+/**
+ * 按"变量名是否敏感"决定一个值怎么显示。所有展示 .env 内容的地方都该走这一个函数,
+ * 免得再出现"启用区打码、禁用区明文"这种漏网
+ */
+export function envValueDisplayer(
+  customSecrets: string[] | undefined,
+  reveal = false,
+): (key: string, value: string) => string {
+  return (key, value) => {
+    if (reveal) return value;
+    return isSecretKey(key, customSecrets) || isEncryptedValue(value) ? maskSecret(value) : value;
+  };
+}
+
+/**
+ * 把一份 .env 文本渲染成可以放进 markdown 代码块的样子:
+ * 注释行、空行原样保留(比结构化展示更贴近原文),只把敏感值打码
+ */
+export function formatEnvContentMasked(content: string, customSecrets: string[] | undefined, reveal = false): string {
+  const show = envValueDisplayer(customSecrets, reveal);
+  return parseEnv(content)
+    .map((line) => {
+      if (line.type !== "kv") return line.raw.trimEnd();
+      return `${line.disabled ? "# " : ""}${line.key}=${show(line.key, line.value)}`;
+    })
+    .join("\n");
 }
 
 export function formatEnvDiff(entries: EnvDiffEntry[], displayValue: (key: string, value: string) => string): string {
