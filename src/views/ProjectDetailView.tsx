@@ -585,7 +585,7 @@ export function ProjectDetailView({
       />
       <Action
         title={t("pd.actionGenerateExample")}
-        icon={Icon.Document}
+        icon={Icon.Wand}
         shortcut={{ modifiers: ["cmd"], key: "g" }}
         onAction={handleGenerateExample}
       />
@@ -822,7 +822,7 @@ export function ProjectDetailView({
                   icon={Icon.Info}
                   target={<Detail markdown={t("pd.envrcDetailMarkdown")} navigationTitle={t("pd.envrcTitle")} />}
                 />
-                <Action title={t("pd.envrcDismiss")} icon={Icon.EyeDisabled} onAction={handleDismissEnvrc} />
+                <Action title={t("pd.envrcDismiss")} icon={Icon.BellDisabled} onAction={handleDismissEnvrc} />
               </ActionPanel>
             }
           />
@@ -858,10 +858,10 @@ export function ProjectDetailView({
                 />
                 <Action
                   title={t("ps.driftUpdatePreset", { name: driftPreset.name })}
-                  icon={Icon.Upload}
+                  icon={Icon.SaveDocument}
                   onAction={() => handleUpdatePresetFromFile(driftPreset)}
                 />
-                <Action title={t("ps.driftDismiss")} icon={Icon.EyeDisabled} onAction={handleDismissDrift} />
+                <Action title={t("ps.driftDismiss")} icon={Icon.BellDisabled} onAction={handleDismissDrift} />
                 {fileActions}
                 {presetActions}
               </ActionPanel>
@@ -887,7 +887,7 @@ export function ProjectDetailView({
                 ...duplicateAccessory(kv.key),
                 ...exportAccessory(kv.exportPrefix),
                 ...commentAccessory(kv.comment),
-                ...(isEncrypted ? [{ tag: { value: "encrypted", color: Color.Purple } }] : []),
+                ...(isEncrypted ? [{ tag: { value: t("pd.encryptedTag"), color: Color.Purple } }] : []),
                 ...(isSecret
                   ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("pd.lockTooltip") }]
                   : []),
@@ -958,7 +958,7 @@ export function ProjectDetailView({
                     />
                     <Action
                       title={isSecret ? t("pd.actionSecretOff") : t("pd.actionSecretOn")}
-                      icon={Icon.Lock}
+                      icon={isSecret ? Icon.LockUnlocked : Icon.Lock}
                       shortcut={{ modifiers: ["cmd"], key: "m" }}
                       onAction={() => handleToggleSecret(kv.key)}
                     />
@@ -1090,14 +1090,24 @@ export function ProjectDetailView({
               {structureCandidates.length > 0 && (
                 <ActionPanel.Submenu title={t("pd.fillStructureMenuTitle")} icon={Icon.Document}>
                   {structureCandidates.map((f) => (
-                    <Action key={f} title={f} onAction={() => handleFillFromReference(f, "structure")} />
+                    <Action
+                      key={f}
+                      title={f}
+                      icon={Icon.Document}
+                      onAction={() => handleFillFromReference(f, "structure")}
+                    />
                   ))}
                 </ActionPanel.Submenu>
               )}
               {fullCopyCandidates.length > 0 && (
                 <ActionPanel.Submenu title={t("pd.fillFullMenuTitle")} icon={Icon.Duplicate}>
                   {fullCopyCandidates.map((f) => (
-                    <Action key={f} title={f} onAction={() => handleFillFromReference(f, "full")} />
+                    <Action
+                      key={f}
+                      title={f}
+                      icon={Icon.Document}
+                      onAction={() => handleFillFromReference(f, "full")}
+                    />
                   ))}
                 </ActionPanel.Submenu>
               )}

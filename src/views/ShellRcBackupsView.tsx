@@ -187,7 +187,7 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
     <ActionPanel.Section title={t("rcb.sectionBackup")}>
       <Action
         title={t("rcb.actionBackupNow", { file: rcInfo.rcLabel })}
-        icon={Icon.Download}
+        icon={Icon.SaveDocument}
         onAction={handleBackupNow}
       />
       <Action.Push

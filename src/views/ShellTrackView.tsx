@@ -458,11 +458,15 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                 {rcInfo.isSourced ? (
                   <Action
                     title={t("st.actionCopyRefresh")}
-                    icon={Icon.Terminal}
+                    icon={Icon.Clipboard}
                     onAction={() => copyRefreshCommand(refreshCommand)}
                   />
                 ) : unsupportedShell ? null : (
-                  <Action.CopyToClipboard title={t("st.copySourceCommand")} icon={Icon.Terminal} content={sourceLine} />
+                  <Action.CopyToClipboard
+                    title={t("st.copySourceCommand")}
+                    icon={Icon.Clipboard}
+                    content={sourceLine}
+                  />
                 )}
                 <Action.Push
                   title={t("st.actionNewSnippet")}
@@ -473,14 +477,14 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                 {!unsupportedShell && (
                   <Action.Push
                     title={t("st.actionRcBackups", { file: rcInfo.rcLabel })}
-                    icon={Icon.SaveDocument}
+                    icon={Icon.Folder}
                     target={<ShellRcBackupsView rcInfo={rcInfo} />}
                   />
                 )}
                 <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
                 <Action.Push
                   title={t("st.actionConfigHistory")}
-                  icon={Icon.List}
+                  icon={Icon.Rewind}
                   target={<ShellConfigHistoryView currentConfig={config} onRestored={refreshConfig} />}
                 />
                 <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
@@ -820,7 +824,7 @@ function SnippetListItem({
               )}
               <Action.Push
                 title={t("grp.actionRename", { group })}
-                icon={Icon.Folder}
+                icon={Icon.Pencil}
                 target={
                   <RenameGroupForm
                     group={group}
@@ -832,7 +836,7 @@ function SnippetListItem({
               />
               <Action
                 title={t("grp.actionDissolve", { group })}
-                icon={Icon.Folder}
+                icon={Icon.Eraser}
                 style={Action.Style.Destructive}
                 onAction={() => onDissolveGroup(group)}
               />
@@ -852,7 +856,7 @@ function SnippetListItem({
             />
             <Action.Push
               title={t("st.actionConfigHistory")}
-              icon={Icon.List}
+              icon={Icon.Rewind}
               target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
             />
             <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
@@ -861,7 +865,7 @@ function SnippetListItem({
             <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
             <Action
               title={t("st.actionCopyRefresh")}
-              icon={Icon.Terminal}
+              icon={Icon.Clipboard}
               onAction={() => copyRefreshCommand(refreshCommand)}
             />
           </ActionPanel.Section>

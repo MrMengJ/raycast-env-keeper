@@ -362,7 +362,7 @@ export function PresetsView({
                     <ActionPanel.Section>
                       <Action.Push
                         title={t("grp.actionRename", { group: preset.group })}
-                        icon={Icon.Folder}
+                        icon={Icon.Pencil}
                         target={
                           <RenameGroupForm
                             group={preset.group}
@@ -381,7 +381,7 @@ export function PresetsView({
                       />
                       <Action
                         title={t("grp.actionDissolve", { group: preset.group })}
-                        icon={Icon.Folder}
+                        icon={Icon.Eraser}
                         style={Action.Style.Destructive}
                         onAction={() => handleDissolveGroup(preset.group as string)}
                       />
@@ -409,7 +409,7 @@ export function PresetsView({
                     />
                     <Action.Push
                       title={t("ps.actionHistory")}
-                      icon={Icon.Clock}
+                      icon={Icon.Rewind}
                       target={
                         <PresetsHistoryView
                           projectId={projectId}
@@ -439,7 +439,7 @@ export function PresetsView({
               {createActions}
               <Action.Push
                 title={t("ps.actionHistory")}
-                icon={Icon.Clock}
+                icon={Icon.Rewind}
                 target={
                   <PresetsHistoryView
                     projectId={projectId}

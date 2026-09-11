@@ -191,7 +191,7 @@ export default function Command() {
               subtitle={displayVal}
               accessories={[
                 { text: item.sourceLabel },
-                ...(isEncrypted ? [{ tag: { value: "encrypted", color: Color.Purple } }] : []),
+                ...(isEncrypted ? [{ tag: { value: t("pd.encryptedTag"), color: Color.Purple } }] : []),
                 ...(isSecret
                   ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("search.lockTooltip") }]
                   : []),

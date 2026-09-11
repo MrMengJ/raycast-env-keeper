@@ -215,13 +215,13 @@ export default function Command() {
                   {isMissing ? (
                     <Action.Push
                       title={t("mv.actionRelocate")}
-                      icon={Icon.ArrowRight}
+                      icon={Icon.Folder}
                       target={<RelocateProjectForm project={p} onDone={() => refreshProjects()} />}
                     />
                   ) : (
                     <Action.Push
                       title={t("mv.actionManage")}
-                      icon={Icon.Gear}
+                      icon={Icon.ArrowRight}
                       target={<ProjectDetailView project={p} onProjectUpdated={() => refreshProjects()} />}
                       onPush={() => handleOpenProject(p)}
                     />
@@ -245,7 +245,7 @@ export default function Command() {
                   />
                   <Action
                     title={t("mv.actionRemove")}
-                    icon={Icon.Trash}
+                    icon={Icon.MinusCircle}
                     style={Action.Style.Destructive}
                     shortcut={{ modifiers: ["cmd"], key: "backspace" }}
                     onAction={() => handleRemoveProject(p)}
