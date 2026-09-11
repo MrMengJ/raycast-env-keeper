@@ -531,7 +531,17 @@ export function ProjectDetailView({
       {projectPresets.length > 0 && (
         <ActionPanel.Submenu title={t("ps.applyMenuTitle")} icon={Icon.Replace}>
           {groupPresets(projectPresets).map((bucket) => (
-            <ActionPanel.Section key={bucket.group ?? "__ungrouped__"} title={bucket.group ?? t("ps.ungroupedSection")}>
+            <ActionPanel.Section
+              key={bucket.group ?? "__ungrouped__"}
+              // 一个分组都没有时不摆"未分组"标题,同管理方案页
+              title={
+                presetGroups.length > 0
+                  ? bucket.group
+                    ? t("ps.groupSection", { group: bucket.group })
+                    : t("ps.ungroupedSection")
+                  : undefined
+              }
+            >
               {bucket.presets.map((preset) => (
                 <Action
                   key={preset.id}

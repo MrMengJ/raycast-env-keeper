@@ -22,6 +22,7 @@ import {
   type Preset,
   type PresetsFile,
   removePreset,
+  renamePresetGroup,
   updatePreset,
 } from "@env-butler/core";
 import { t } from "../i18n.js";
@@ -31,6 +32,10 @@ import { PresetContentForm } from "./PresetContentForm.js";
 import { PresetDiffView } from "./PresetDiffView.js";
 import { PresetMetaForm } from "./PresetMetaForm.js";
 import { PresetsHistoryView } from "./PresetsHistoryView.js";
+import { RenameGroupForm } from "./RenameGroupForm.js";
+
+/** 分组筛选里"未分组"那一项的值。组名存进去前都裁过空白,带前导空格的值不可能撞上真实组名 */
+const UNGROUPED_FILTER = " ungrouped";
 
 interface PresetsViewProps {
   projectId: string;
@@ -84,7 +89,32 @@ export function PresetsView({
   const presets = listPresetsForProject(file, projectId);
   const groups = listPresetGroups(file, projectId);
   const activeIds = new Set(presets.filter((p) => p.content === currentContent).map((p) => p.id));
+  // 分组筛选:"" 全部;UNGROUPED_FILTER 只看没分组的;其余是组名。一个分组都没有时下拉框不出现,也不筛
+  const [groupFilter, setGroupFilter] = useState("");
+  const visiblePresets =
+    groups.length === 0 || groupFilter === ""
+      ? presets
+      : presets.filter((p) => (groupFilter === UNGROUPED_FILTER ? !p.group : p.group === groupFilter));
   const varCount = (p: Preset) => parseEnv(p.content).filter((l) => l.type === "kv").length;
+  const groupSize = (group: string) => presets.filter((p) => p.group === group).length;
+
+  /** 改组名 / 解散组之后,正筛着这个组的话筛选会落空,退回"全部" */
+  const persistGroupChange = async (next: PresetsFile, from: string) => {
+    await persist(next);
+    if (groupFilter === from) setGroupFilter("");
+  };
+
+  const handleDissolveGroup = async (group: string) => {
+    const confirmed = await confirmAlert({
+      title: t("ps.dissolveGroupTitle", { group }),
+      message: t("ps.dissolveGroupMessage", { count: groupSize(group) }),
+      primaryAction: { title: t("ps.dissolveGroupConfirm"), style: Alert.ActionStyle.Destructive },
+      dismissAction: { title: t("common.cancel") },
+    });
+    if (!confirmed) return;
+    await persistGroupChange(renamePresetGroup(file, projectId, group, undefined), group);
+    await showToast({ style: Toast.Style.Success, title: t("ps.dissolvedGroupToast", { group }) });
+  };
 
   const handleDelete = async (preset: Preset) => {
     const confirmed = await confirmAlert({
@@ -103,6 +133,17 @@ export function PresetsView({
       isLoading={loading}
       navigationTitle={t("ps.navTitle", { project: projectName })}
       searchBarPlaceholder={t("ps.searchPlaceholder")}
+      searchBarAccessory={
+        groups.length > 0 ? (
+          <List.Dropdown tooltip={t("ps.groupFilterTooltip")} value={groupFilter} onChange={setGroupFilter}>
+            <List.Dropdown.Item value="" title={t("ps.groupFilterAll")} />
+            {groups.map((g) => (
+              <List.Dropdown.Item key={g} value={g} title={g} />
+            ))}
+            <List.Dropdown.Item value={UNGROUPED_FILTER} title={t("ps.ungroupedSection")} />
+          </List.Dropdown>
+        ) : undefined
+      }
     >
       {problem && (
         <List.Section title={t("cfg.sectionTitle")}>
@@ -110,11 +151,18 @@ export function PresetsView({
         </List.Section>
       )}
 
-      {groupPresets(presets).map((bucket) => (
+      {/* 一个分组都没有时不摆区块标题:只有一个"未分组"区块还带标题,纯属噪音 */}
+      {groupPresets(visiblePresets).map((bucket) => (
         <List.Section
           key={bucket.group ?? "__ungrouped__"}
-          title={bucket.group ?? t("ps.ungroupedSection")}
-          subtitle={String(bucket.presets.length)}
+          title={
+            groups.length > 0
+              ? bucket.group
+                ? t("ps.groupSection", { group: bucket.group })
+                : t("ps.ungroupedSection")
+              : undefined
+          }
+          subtitle={groups.length > 0 ? t("ps.groupSectionCount", { count: bucket.presets.length }) : undefined}
         >
           {bucket.presets.map((preset) => (
             <List.Item
@@ -123,6 +171,7 @@ export function PresetsView({
               icon={Icon.Box}
               title={preset.name}
               subtitle={preset.note}
+              keywords={preset.group ? [preset.group] : undefined}
               accessories={[
                 ...(activeIds.has(preset.id)
                   ? [{ tag: { value: t("ps.liveAccessory", { file: envFilename }), color: Color.Green } }]
@@ -236,6 +285,37 @@ export function PresetsView({
                       onAction={() => handleDelete(preset)}
                     />
                   </ActionPanel.Section>
+
+                  {/* 分组只是散落在每份方案上的字段,区块标题挂不了动作,所以从组里任意一份方案进 */}
+                  {preset.group && (
+                    <ActionPanel.Section>
+                      <Action.Push
+                        title={t("ps.actionRenameGroup", { group: preset.group })}
+                        icon={Icon.Folder}
+                        target={
+                          <RenameGroupForm
+                            group={preset.group}
+                            count={groupSize(preset.group)}
+                            otherGroups={groups.filter((g) => g !== preset.group)}
+                            onRename={async (to) => {
+                              const from = preset.group as string;
+                              await persistGroupChange(renamePresetGroup(file, projectId, from, to), from);
+                              await showToast({
+                                style: Toast.Style.Success,
+                                title: t("ps.renamedGroupToast", { from, to }),
+                              });
+                            }}
+                          />
+                        }
+                      />
+                      <Action
+                        title={t("ps.actionDissolveGroup", { group: preset.group })}
+                        icon={Icon.Folder}
+                        style={Action.Style.Destructive}
+                        onAction={() => handleDissolveGroup(preset.group as string)}
+                      />
+                    </ActionPanel.Section>
+                  )}
 
                   <ActionPanel.Section>
                     <Action.Push
