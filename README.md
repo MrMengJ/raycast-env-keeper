@@ -21,7 +21,8 @@ Env Butler 把这些事收进一个键盘驱动的面板。
 | 命令 | 做什么 |
 |---|---|
 | **Manage Envs** | 项目轨:登记项目、管理各环境的变量、快照与回滚、生成 `.env.example`<br>Shell 轨:管理全局环境变量 / alias / 脚本片段,生成 `~/.env-butler/shell.sh` |
-| **Search Env Vars** | 跨所有项目和 Shell 轨搜变量名 |
+| **Search Env Vars** | 跨所有项目、方案和 Shell 轨搜变量名 / 变量值 |
+| **Jump to** | 按名字直达某个项目、环境文件、方案或 Shell 片段;片段可以就地启用 / 停用 |
 
 ## 核心设计:文件就是真相源
 

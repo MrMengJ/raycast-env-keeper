@@ -48,6 +48,8 @@ interface PresetsViewProps {
   onApply: (preset: Preset) => Promise<void>;
   /** 这里改了方案(改名/改内容/删除)之后通知父页面重读 */
   onChanged: () => void;
+  /** 从 Jump To 跳过来时,直接选中那份方案 */
+  initialSelectedId?: string;
 }
 
 /**
@@ -62,8 +64,11 @@ export function PresetsView({
   customSecrets,
   onApply,
   onChanged,
+  initialSelectedId,
 }: PresetsViewProps) {
   const { push, pop } = useNavigation();
+  // 只有从 Jump To 跳过来时才接管选中项;平时交给 Raycast 自己管(同 ShellTrackView)
+  const [selectedItemId, setSelectedItemId] = useState<string | undefined>(initialSelectedId);
   const [file, setFile] = useState<PresetsFile>(createEmptyPresetsFile());
   const [problem, setProblem] = useState<ConfigLoadProblem | undefined>();
   const [loading, setLoading] = useState(true);
@@ -133,6 +138,9 @@ export function PresetsView({
       isLoading={loading}
       navigationTitle={t("ps.navTitle", { project: projectName })}
       searchBarPlaceholder={t("ps.searchPlaceholder")}
+      {...(initialSelectedId
+        ? { selectedItemId, onSelectionChange: (id: string | null) => setSelectedItemId(id ?? undefined) }
+        : {})}
       searchBarAccessory={
         groups.length > 0 ? (
           <List.Dropdown tooltip={t("ps.groupFilterTooltip")} value={groupFilter} onChange={setGroupFilter}>

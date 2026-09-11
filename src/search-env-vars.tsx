@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
   extractShellAssignments,
+  findShellConflicts,
   formatKVRaw,
   isEncryptedValue,
   isSecretKey,
@@ -11,7 +12,7 @@ import {
   type ProjectMeta,
 } from "@env-butler/core";
 import { t } from "./i18n.js";
-import { detectProjectEnvFiles, loadRegistry, loadShellConfig, readEnvFile } from "./services/storage.js";
+import { detectProjectEnvFiles, loadPresets, loadRegistry, loadShellConfig, readEnvFile } from "./services/storage.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
 
@@ -31,6 +32,10 @@ interface MatchedVariable {
   envFilename?: string;
   /** Shell 轨:变量所在片段的 id,跳过去时直接选中它 */
   snippetId?: string;
+  /** Shell 轨:同一个变量还在别的已启用片段里设了,而且最终以那份为准——这一行的值其实没生效 */
+  overriddenBy?: string;
+  /** 项目轨的方案:这是"候选值"不是"生效值"。方案没有文件,跳过去落在项目页 */
+  presetName?: string;
 }
 
 export default function Command() {
@@ -45,7 +50,7 @@ export default function Command() {
       try {
         // 项目和文件都并行扫。原先是嵌套 for + await 串行,
         // 10 个项目 × 3 个文件就是 30 次排队等待的磁盘往返
-        const [{ data: reg }, shell] = await Promise.all([loadRegistry(), loadShellConfig()]);
+        const [{ data: reg }, shell, presets] = await Promise.all([loadRegistry(), loadShellConfig(), loadPresets()]);
 
         const perProject = await Promise.all(
           reg.projects.map(async (project) => {
@@ -80,18 +85,52 @@ export default function Command() {
           }),
         );
 
-        // Shell 轨里存的同样是环境变量,搜 JAVA_HOME 却搜不到会被当成 bug
+        // Shell 轨里存的同样是环境变量,搜 JAVA_HOME 却搜不到会被当成 bug。
+        // 搜索也是用户最容易发现"这个变量设了两处"的地方,所以把被覆盖的那条标出来
+        const conflicts = findShellConflicts(shell.data.snippets);
         const shellVars = shell.data.snippets.flatMap((snippet) =>
-          extractShellAssignments(snippet.content).map<MatchedVariable>((a) => ({
-            key: a.key,
-            value: a.value,
-            disabled: !snippet.enabled,
-            sourceLabel: t("search.shellSource", { name: snippet.name }),
-            snippetId: snippet.id,
-          })),
+          extractShellAssignments(snippet.content).map<MatchedVariable>((a) => {
+            const conflict = conflicts.find(
+              (c) => c.kind === "variable" && c.name === a.key && c.snippets.some((x) => x.id === snippet.id),
+            );
+            const winner =
+              conflict && conflict.effectiveId !== snippet.id
+                ? conflict.snippets.find((x) => x.id === conflict.effectiveId)
+                : undefined;
+            return {
+              key: a.key,
+              value: a.value,
+              disabled: !snippet.enabled,
+              sourceLabel: snippet.group
+                ? t("search.shellSourceGrouped", { group: snippet.group, name: snippet.name })
+                : t("search.shellSource", { name: snippet.name }),
+              snippetId: snippet.id,
+              overriddenBy: winner?.name,
+            };
+          }),
         );
 
-        setAllVars([...perProject.flat(), ...shellVars]);
+        // 方案是变量值的正经存放处("客户老王的 API_KEY 是多少"答案在这),搜不到同样会被当成 bug。
+        // 但它是候选值不是生效值,单独一个分区、排最后
+        const projectById = new Map(reg.projects.map((p) => [p.id, p]));
+        const presetVars = presets.data.presets.flatMap((preset) => {
+          const project = projectById.get(preset.projectId);
+          if (!project) return [];
+          return parseEnv(preset.content)
+            .filter((l): l is Extract<typeof l, { type: "kv" }> => l.type === "kv")
+            .map<MatchedVariable>((l) => ({
+              key: l.key,
+              value: l.value,
+              disabled: l.disabled,
+              quote: l.quote,
+              comment: l.comment,
+              sourceLabel: t("search.presetSource", { project: project.name, name: preset.name }),
+              project,
+              presetName: preset.name,
+            }));
+        });
+
+        setAllVars([...perProject.flat(), ...shellVars, ...presetVars]);
       } catch (e) {
         await showToast({
           style: Toast.Style.Failure,
@@ -124,8 +163,9 @@ export default function Command() {
       (!isSecretKey(v.key, v.project?.customSecrets) && v.value.toLowerCase().includes(q))
     );
   });
-  const projectVars = filtered.filter((v) => v.project);
+  const projectVars = filtered.filter((v) => v.project && !v.presetName);
   const shellVars = filtered.filter((v) => !v.project);
+  const presetVars = filtered.filter((v) => v.presetName);
 
   const renderSection = (title: string, items: MatchedVariable[]) => {
     if (items.length === 0) return null;
@@ -150,6 +190,17 @@ export default function Command() {
                   ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("search.lockTooltip") }]
                   : []),
                 ...(item.disabled ? [{ tag: { value: t("pd.disabledTag"), color: Color.SecondaryText } }] : []),
+                ...(item.overriddenBy
+                  ? [
+                      {
+                        tag: {
+                          value: t("search.overriddenTag", { name: item.overriddenBy }),
+                          color: Color.SecondaryText,
+                        },
+                        tooltip: t("search.overriddenTooltip", { name: item.overriddenBy }),
+                      },
+                    ]
+                  : []),
               ]}
               actions={
                 <ActionPanel>
@@ -214,6 +265,7 @@ export default function Command() {
     >
       {renderSection(t("search.sectionTitle"), projectVars)}
       {renderSection(t("search.sectionShell"), shellVars)}
+      {renderSection(t("search.sectionPresets"), presetVars)}
 
       {filtered.length === 0 && !loading && (
         <List.EmptyView title={t("search.emptyTitle")} description={t("search.emptyDesc")} />

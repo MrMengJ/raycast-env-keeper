@@ -27,6 +27,13 @@
       "subtitle": "Env Butler",
       "description": "Quickly search environment variables across all registered projects.",
       "mode": "view"
+    },
+    {
+      "name": "jump-to",
+      "title": "Jump to",
+      "subtitle": "Env Butler",
+      "description": "Open a project, env file, profile or shell snippet by name.",
+      "mode": "view"
     }
   ],
   "tools": [],

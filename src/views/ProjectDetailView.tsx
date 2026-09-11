@@ -62,6 +62,7 @@ import { EditVariableForm, type VariableFormData } from "./EditVariableForm.js";
 import { PresetDiffView } from "./PresetDiffView.js";
 import { PresetMetaForm, type PresetMetaData } from "./PresetMetaForm.js";
 import { PresetsView } from "./PresetsView.js";
+import { applyPresetToFile } from "../services/presetApply.js";
 import { RawContentForm } from "./RawContentForm.js";
 import { SnapshotHistoryView } from "./SnapshotHistoryView.js";
 
@@ -420,18 +421,9 @@ export function ProjectDetailView({
   // 整份替换,不问直接写。确认这一步由差异页承担(见 handleApplyPreset)
   const applyPresetNow = async (preset: Preset) => {
     try {
-      const result = await writeEnvFileWithSnapshot({
-        projectName: currentProject.name,
-        envFilePath: currentEnvFilePath,
-        newContent: preset.content,
-        force: true,
-      });
+      const result = await applyPresetToFile({ project: currentProject, envFilename: selectedEnvFile, preset });
       await loadCurrentEnvContent();
-      // 记下"这个文件现在对应哪份方案",之后手改了才判得出漂移。
-      // 方案文件本身读不出来时跳过这一步:文件已经套用成功了,不能因为记不下账就报"套用失败"
-      if (!presetsProblem) {
-        await persistPresets(recordPresetApplied(presetsFile, currentProject.id, selectedEnvFile, preset.id));
-      }
+      await loadPresetsState();
       await showToast({
         style: Toast.Style.Success,
         title: t("ps.appliedToast", { name: preset.name, file: selectedEnvFile }),
