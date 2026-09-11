@@ -13,20 +13,27 @@ import type { ConfigLoadProblem } from "../services/storage.js";
 export function ConfigProblemItem({ problem }: { problem: ConfigLoadProblem }) {
   const name = basename(problem.backupPath);
   const isTooNew = problem.reason === "tooNew";
+  const isUnreadable = problem.reason === "unreadable";
+
+  // 三种情况要说清:读不出来(文件还在原位、检查权限)/ 坏了但已挪开(去修)/ 坏了且没挪开(修好前不会写入)
+  const title = isUnreadable ? t("cfg.unreadableTitle") : isTooNew ? t("cfg.tooNewTitle") : t("cfg.corruptedTitle");
+  const subtitle = isUnreadable
+    ? t("cfg.unreadableSubtitle", { name })
+    : !problem.quarantined
+      ? t("cfg.notQuarantinedSubtitle", { name })
+      : isTooNew
+        ? t("cfg.tooNewSubtitle", {
+            version: problem.fileVersion ?? "?",
+            current: problem.currentVersion,
+            name,
+          })
+        : t("cfg.corruptedSubtitle", { name });
 
   return (
     <List.Item
       icon={{ source: Icon.ExclamationMark, tintColor: Color.Red }}
-      title={isTooNew ? t("cfg.tooNewTitle") : t("cfg.corruptedTitle")}
-      subtitle={
-        isTooNew
-          ? t("cfg.tooNewSubtitle", {
-              version: problem.fileVersion ?? "?",
-              current: problem.currentVersion,
-              name,
-            })
-          : t("cfg.corruptedSubtitle", { name })
-      }
+      title={title}
+      subtitle={subtitle}
       actions={
         <ActionPanel>
           <Action.ShowInFinder title={t("cfg.showBackup")} path={problem.backupPath} />

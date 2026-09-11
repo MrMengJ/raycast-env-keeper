@@ -138,7 +138,17 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     if (!confirmed) return;
 
     try {
-      const { backupPath } = await removeShellSourceLine(rc.rcPath);
+      const { removed, backupPath } = await removeShellSourceLine(rc.rcPath);
+      // 那一行本来就不在(用户手动删过、rc 文件不存在):如实说,别报"已移除"
+      if (!removed) {
+        await showToast({
+          style: Toast.Style.Failure,
+          title: t("st.disableNotFoundTitle", { file: rc.rcLabel }),
+          message: t("st.disableNotFoundMessage"),
+        });
+        await refreshConfig();
+        return;
+      }
       await showToast({
         style: Toast.Style.Success,
         title: t("st.disabledIntegrationToast", { file: rc.rcLabel }),
@@ -167,66 +177,102 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     return [conflictHint, snapshotLimitHint(snapshot)].filter(Boolean).join(" · ") || undefined;
   };
 
-  const handleToggle = async (id: string) => {
-    const updated = toggleShellSnippet(config, id);
+  /**
+   * 所有"改配置"的动作都走这里:先重读磁盘再套改动、再存、再提示。
+   * 重读是因为 Jump to 也能启停片段,而这一页拿着的是打开时的旧数据,直接拿它写会把别处的改动盖回去;
+   * 出错要抛出去——磁盘满、没权限时此前八个动作全部静默,用户看到的是"点了没反应"
+   */
+  const commit = async (
+    mutate: (latest: ShellConfig) => ShellConfig,
+    describe: (
+      updated: ShellConfig,
+      snapshot: Parameters<typeof snapshotLimitHint>[0],
+    ) => { title: string; message?: string },
+  ): Promise<void> => {
+    const latest = await loadShellConfig();
+    if (latest.problem) {
+      throw new Error(latest.problem.reason === "unreadable" ? t("cfg.unreadableTitle") : t("cfg.corruptedTitle"));
+    }
+    const updated = mutate(latest.data);
+    if (updated === latest.data) {
+      setConfig(latest.data);
+      return;
+    }
     const snapshot = await saveShellConfig(updated);
     setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.toggledToast"),
-      message: saveHint(updated, id, snapshot),
-    });
+    const { title, message } = describe(updated, snapshot);
+    await showToast({ style: Toast.Style.Success, title, message });
   };
 
+  /** 列表里直接触发的动作没有表单兜底,出错在这里提示 */
+  const run = async (action: () => Promise<void>) => {
+    try {
+      await action();
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("common.saveFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  const handleToggle = (id: string) =>
+    run(() =>
+      commit(
+        (latest) => toggleShellSnippet(latest, id),
+        (updated, snapshot) => ({ title: t("st.toggledToast"), message: saveHint(updated, id, snapshot) }),
+      ),
+    );
+
+  // 表单调用的两个不包 run:失败要抛给表单,表单会提示并留在原地,内容不丢
   const handleAdd = async (data: Omit<ShellSnippet, "id">) => {
-    const { config: updated, snippet } = addShellSnippet(config, data);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.addedToast"),
-      message: saveHint(updated, snippet.id, snapshot),
-    });
+    let newId = "";
+    await commit(
+      (latest) => {
+        const { config: updated, snippet } = addShellSnippet(latest, data);
+        newId = snippet.id;
+        return updated;
+      },
+      (updated, snapshot) => ({ title: t("st.addedToast"), message: saveHint(updated, newId, snapshot) }),
+    );
   };
 
-  const handleEdit = async (id: string, data: Omit<ShellSnippet, "id">) => {
-    const updated = updateShellSnippet(config, id, data);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.updatedToast"),
-      message: saveHint(updated, id, snapshot),
-    });
-  };
+  const handleEdit = (id: string, data: Omit<ShellSnippet, "id">) =>
+    commit(
+      (latest) => updateShellSnippet(latest, id, data),
+      (updated, snapshot) => ({ title: t("st.updatedToast"), message: saveHint(updated, id, snapshot) }),
+    );
 
-  const handleSetGroupEnabled = async (group: string, enabled: boolean) => {
-    const updated = setShellGroupEnabled(config, group, enabled);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    // 整组打开后可能跟组外的片段撞上,挑组里第一条有冲突的提一句
-    const members = updated.snippets.filter((s) => s.group === group);
-    const hit = enabled
-      ? findShellConflicts(updated.snippets).find((c) => c.snippets.some((x) => members.some((m) => m.id === x.id)))
-      : undefined;
-    const hitId = hit?.snippets.find((x) => members.some((m) => m.id === x.id))?.id;
-    await showToast({
-      style: Toast.Style.Success,
-      title: enabled ? t("st.groupEnabledToast", { group }) : t("st.groupDisabledToast", { group }),
-      message: hitId ? saveHint(updated, hitId, snapshot) : snapshotLimitHint(snapshot),
-    });
-  };
+  const handleSetGroupEnabled = (group: string, enabled: boolean) =>
+    run(() =>
+      commit(
+        (latest) => setShellGroupEnabled(latest, group, enabled),
+        (updated, snapshot) => {
+          // 整组打开后可能跟组外的片段撞上,挑组里第一条有冲突的提一句
+          const members = updated.snippets.filter((s) => s.group === group);
+          const hit = enabled
+            ? findShellConflicts(updated.snippets).find((c) =>
+                c.snippets.some((x) => members.some((m) => m.id === x.id)),
+              )
+            : undefined;
+          const hitId = hit?.snippets.find((x) => members.some((m) => m.id === x.id))?.id;
+          return {
+            title: enabled ? t("st.groupEnabledToast", { group }) : t("st.groupDisabledToast", { group }),
+            message: hitId ? saveHint(updated, hitId, snapshot) : snapshotLimitHint(snapshot),
+          };
+        },
+      ),
+    );
 
-  const handleRenameGroup = async (from: string, to: string) => {
-    const updated = renameShellGroup(config, from, to);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.groupRenamedToast", { from, to }),
-      message: snapshotLimitHint(snapshot),
-    });
-  };
+  const handleRenameGroup = (from: string, to: string) =>
+    commit(
+      (latest) => renameShellGroup(latest, from, to),
+      (_updated, snapshot) => ({
+        title: t("st.groupRenamedToast", { from, to }),
+        message: snapshotLimitHint(snapshot),
+      }),
+    );
 
   const handleDissolveGroup = async (group: string) => {
     const count = config.snippets.filter((s) => s.group === group).length;
@@ -237,29 +283,30 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       dismissAction: { title: t("common.cancel") },
     });
     if (!confirmed) return;
-    const updated = renameShellGroup(config, group, undefined);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.groupDissolvedToast", { group }),
-      message: snapshotLimitHint(snapshot),
-    });
+    await run(() =>
+      commit(
+        (latest) => renameShellGroup(latest, group, undefined),
+        (_updated, snapshot) => ({
+          title: t("st.groupDissolvedToast", { group }),
+          message: snapshotLimitHint(snapshot),
+        }),
+      ),
+    );
   };
 
   // 调整片段在 shell.sh 里的先后。列表是按分组显示的,分组顺序跟文件里的真实顺序对不上,
   // 所以移动后用 toast 报一下新位置,再配合"查看生成的 shell.sh"让用户能核对
-  const handleMove = async (id: string, direction: "up" | "down") => {
-    const updated = moveShellSnippet(config, id, direction);
-    if (updated === config) return; // 已经在最前/最后,moveShellSnippet 原样返回
-    await saveShellConfig(updated);
-    setConfig(updated);
-    const index = updated.snippets.findIndex((s) => s.id === id) + 1;
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.movedToast", { index, total: updated.snippets.length }),
-    });
-  };
+  const handleMove = (id: string, direction: "up" | "down") =>
+    run(() =>
+      commit(
+        // 已经在最前/最后时 moveShellSnippet 原样返回,commit 里会识别出"没变"不写盘
+        (latest) => moveShellSnippet(latest, id, direction),
+        (updated) => {
+          const index = updated.snippets.findIndex((s) => s.id === id) + 1;
+          return { title: t("st.movedToast", { index, total: updated.snippets.length }) };
+        },
+      ),
+    );
 
   const handleDelete = async (item: ShellSnippet) => {
     const confirmed = await confirmAlert({
@@ -275,14 +322,12 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     });
     if (!confirmed) return;
 
-    const updated = removeShellSnippet(config, item.id);
-    const snapshot = await saveShellConfig(updated);
-    setConfig(updated);
-    await showToast({
-      style: Toast.Style.Success,
-      title: t("st.deletedToast"),
-      message: snapshotLimitHint(snapshot),
-    });
+    await run(() =>
+      commit(
+        (latest) => removeShellSnippet(latest, item.id),
+        (_updated, snapshot) => ({ title: t("st.deletedToast"), message: snapshotLimitHint(snapshot) }),
+      ),
+    );
   };
 
   const shellPath = getShellScriptPath();
@@ -293,6 +338,8 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
   const conflicts = findShellConflicts(config.snippets);
   const groups = listShellGroups(config);
   const buckets = groupShellSnippets(config.snippets);
+  // rc 里没有 source 那一行时,片段再"已启用"也不会进任何终端;界面不能照旧显示绿色"已生效"
+  const integrationActive = rcInfo?.isSourced ?? true;
 
   // 每个分区渲染的是同一种条目,props 也完全一样,抽出来避免抄几遍
   const renderSnippet = (item: ShellSnippet) => (
@@ -318,6 +365,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       currentConfig={config}
       onRestored={refreshConfig}
       refreshCommand={sourceLine}
+      integrationActive={integrationActive}
     />
   );
 
@@ -354,9 +402,14 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
         <List.Section title={t("st.bootstrapSection")}>
           <List.Item
             id="bootstrap"
+            // 有片段却没接入:这时片段全都不生效,顶上这一行要醒目
             icon={{
-              source: rcInfo.isSourced ? Icon.CheckCircle : Icon.Terminal,
-              tintColor: rcInfo.isSourced ? Color.Green : Color.Blue,
+              source: rcInfo.isSourced
+                ? Icon.CheckCircle
+                : config.snippets.length > 0
+                  ? Icon.ExclamationMark
+                  : Icon.Terminal,
+              tintColor: rcInfo.isSourced ? Color.Green : config.snippets.length > 0 ? Color.Orange : Color.Blue,
             }}
             title={bootstrapTitle}
             subtitle={isShowingDetail ? undefined : bootstrapSubtitle}
@@ -573,8 +626,13 @@ function buildSnippetDetailMarkdown(
   orderTotal: number,
   revealSecrets: boolean,
   conflicts: ShellConflict[],
+  integrationActive: boolean,
 ): string {
-  const statusLabel = item.enabled ? t("st.enabledTag") : t("st.disabledTag");
+  const statusLabel = !item.enabled
+    ? t("st.disabledTag")
+    : integrationActive
+      ? t("st.enabledTag")
+      : t("st.enabledInactiveTag");
   const descriptionLabel = item.description || t("st.detailNone");
   const conflictBlock =
     conflicts.length > 0
@@ -624,6 +682,7 @@ function SnippetListItem({
   currentConfig,
   onRestored,
   refreshCommand,
+  integrationActive,
 }: {
   item: ShellSnippet;
   /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
@@ -649,6 +708,8 @@ function SnippetListItem({
   onRestored: () => void;
   /** `source ~/.env-butler/shell.sh`,粘进已开的终端就能拿到新增和修改 */
   refreshCommand: string;
+  /** rc 文件里有没有 source 那一行;没有的话"已启用"的片段其实进不了任何终端 */
+  integrationActive: boolean;
 }) {
   const group = item.group;
   const someEnabled = groupMates.some((s) => s.enabled);
@@ -664,9 +725,11 @@ function SnippetListItem({
       // 状态放左侧图标位:所有行的图标在同一条竖线上,一列扫下来最快;
       // 右侧只留顺序号,避免开着详情面板时把列表挤得太窄
       icon={
-        item.enabled
-          ? { source: Icon.CheckCircle, tintColor: Color.Green }
-          : { source: Icon.Pause, tintColor: Color.SecondaryText }
+        !item.enabled
+          ? { source: Icon.Pause, tintColor: Color.SecondaryText }
+          : integrationActive
+            ? { source: Icon.CheckCircle, tintColor: Color.Green }
+            : { source: Icon.CheckCircle, tintColor: Color.SecondaryText }
       }
       accessories={[
         { icon: snippetTypeIcon(item.type), tooltip: snippetTypeLabel(item.type) },
@@ -688,7 +751,14 @@ function SnippetListItem({
       ]}
       detail={
         <List.Item.Detail
-          markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal, revealSecrets, conflicts)}
+          markdown={buildSnippetDetailMarkdown(
+            item,
+            orderIndex,
+            orderTotal,
+            revealSecrets,
+            conflicts,
+            integrationActive,
+          )}
         />
       }
       actions={

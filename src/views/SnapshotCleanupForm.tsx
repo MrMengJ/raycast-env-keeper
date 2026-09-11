@@ -18,6 +18,7 @@ export function SnapshotCleanupForm({
   description,
   snapshots,
   onDelete,
+  onCleanupBelow,
   onCleaned,
 }: {
   navTitle: string;
@@ -27,7 +28,10 @@ export function SnapshotCleanupForm({
   description: string;
   /** 已按时间倒序排好(最新在前) */
   snapshots: { filePath: string }[];
-  onDelete: (filePath: string) => Promise<void>;
+  /** 一份份删。给了 onCleanupRange 就不用它 */
+  onDelete?: (filePath: string) => Promise<void>;
+  /** 整段处理:传入最早一份被保留的记录(一份不留时是 null),比它更早的全部一起处理(方案历史按项目清理要这样做) */
+  onCleanupBelow?: (oldestKeptFilePath: string | null) => Promise<void>;
   onCleaned: () => void;
 }) {
   const { pop } = useNavigation();
@@ -38,7 +42,11 @@ export function SnapshotCleanupForm({
   const toDelete = snapshots.slice(keepCount);
 
   const handleSubmit = async () => {
-    if (toDelete.length === 0) return;
+    if (toDelete.length === 0) {
+      // 此前按了没任何反应,像是坏了
+      await showToast({ style: Toast.Style.Failure, title: t("sh.cleanupNothing", { total: snapshots.length }) });
+      return;
+    }
 
     const confirmed = await confirmAlert({
       title: t("sh.cleanupConfirmTitle", { count: toDelete.length, unit }),
@@ -49,8 +57,23 @@ export function SnapshotCleanupForm({
     if (!confirmed) return;
 
     setBusy(true);
-    for (const item of toDelete) {
-      await onDelete(item.filePath);
+    try {
+      if (onCleanupBelow) {
+        await onCleanupBelow(keepCount > 0 ? (snapshots[keepCount - 1]?.filePath ?? null) : null);
+      } else if (onDelete) {
+        for (const item of toDelete) {
+          await onDelete(item.filePath);
+        }
+      }
+    } catch (e) {
+      setBusy(false);
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("sh.cleanupFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+      onCleaned();
+      return;
     }
     setBusy(false);
     await showToast({ style: Toast.Style.Success, title: t("sh.cleanupDoneToast", { count: toDelete.length, unit }) });

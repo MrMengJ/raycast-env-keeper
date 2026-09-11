@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { isValidEnvFilename } from "@env-butler/core";
+import { ENV_TEMPLATE_FILENAMES, isValidEnvFilename } from "@env-butler/core";
 import { t } from "../i18n.js";
 import { createEnvFile } from "../services/storage.js";
 
@@ -9,7 +9,8 @@ interface CreateEnvFileFormProps {
   onCreated: (filename: string) => void;
 }
 
-const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;
+// 允许用点分段:`.env.development.local` 是 Next / Vite 的标准命名
+const SUFFIX_RE = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/;
 
 export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormProps) {
   const { pop } = useNavigation();
@@ -30,6 +31,10 @@ export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormP
     }
 
     const targetFilename = `.env.${trimmed}`;
+    if (ENV_TEMPLATE_FILENAMES.has(targetFilename)) {
+      setSuffixError(t("cf.templateNameError", { filename: targetFilename }));
+      return;
+    }
     if (!isValidEnvFilename(targetFilename)) {
       setSuffixError(t("cf.suffixInvalidError"));
       return;

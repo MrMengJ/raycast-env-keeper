@@ -28,6 +28,11 @@ const zh = {
   "cfg.tooNewSubtitle":
     "文件版本 {version}，当前扩展只认到 {current}。原文件已改名为 {name}，升级扩展后改回原名即可恢复",
   "cfg.showBackup": "在访达中显示原文件",
+  "cfg.unreadableTitle": "配置文件读不出来，请检查权限",
+  "cfg.unreadableSubtitle": "{name} 还在原位，但读取失败。修好之前不会写入，免得覆盖它",
+  "cfg.notQuarantinedSubtitle": "没能把 {name} 挪到一边，它还在原位。修好格式之前不会写入，免得覆盖它",
+  "cfg.writeBlockedUnreadable": "{name} 读不出来，为了不覆盖它，这次没有保存。请检查文件权限",
+  "cfg.writeBlockedCorrupted": "{name} 的内容坏了且还在原位，为了不覆盖它，这次没有保存。请先修好格式或把它挪开",
 
   // ---- manage-envs 主命令 ----
   "mv.searchPlaceholderProjects": "搜索已登记的项目...",
@@ -73,8 +78,8 @@ const zh = {
 
   // ---- 项目详情页 ----
   "pd.readFailedTitle": "读取环境文件失败",
-  "pd.secretOnToast": "已设为敏感字段",
-  "pd.secretOffToast": "已取消敏感字段",
+  "pd.secretOnToast": "已设为敏感字段（仅本项目）",
+  "pd.secretOffToast": "已取消敏感字段（仅本项目）",
   "pd.conflictTitle": "检测到外部修改冲突",
   "pd.conflictMessage":
     "{file} 在你编辑期间被外部程序修改了。选择「放弃修改」会丢弃你刚才的改动、直接加载最新内容；选择「强制覆盖」会用你的改动覆盖外部的修改。",
@@ -145,6 +150,10 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "pd.actionCopyAsMainEnv": "复制当前环境为 .env",
   "pd.lockTooltip": "敏感字段 (已打码)",
   "pd.disabledTag": "已注释",
+  "pd.duplicateTag": "重复",
+  "pd.exportTooltip": "这一行带 export 前缀。dotenv 认这种写法，source 进 shell 也能用",
+  "pd.duplicateTooltip":
+    "文件里有 {count} 行 {key}。程序通常只认其中一行（dotenv 取第一行，有的库取最后一行），建议只留一行",
   "pd.deleteConfirmTitle": "删除变量: {key}",
   "pd.deleteConfirmMessage": "确定要从 {file} 中移除 {key} 吗？修改前将自动创建备份快照。",
   "pd.emptyTitle": "该环境中暂无变量",
@@ -157,6 +166,8 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
 
   // ---- 整份文本编辑 ----
   "raw.contentTitle": "内容",
+  "raw.notSavedTitle": "这次没有保存",
+  "raw.notSavedMessage": "你的内容还在编辑框里。文件已换成外部的最新版本，再次保存会以编辑框里的内容为准",
 
   // ---- 项目轨 · 方案 ----
   "ps.sectionTitle": "方案",
@@ -264,14 +275,14 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "psh.infoCount": "方案数量",
   "psh.contentHeading": "当时本项目有哪些方案",
   "psh.contentEmpty": "(当时没有任何方案)",
-  "psh.actionCopy": "复制这份记录",
+  "psh.actionCopy": "复制这一版（仅本项目的方案）",
   "psh.actionDelete": "删除这份记录",
   "psh.deleteConfirmTitle": "删除这份历史记录？",
   "psh.deleteConfirmMessage": "删除 {filename}，不可恢复。",
   "psh.deletedToast": "已删除",
   "psh.actionCleanup": "清理旧记录",
   "psh.cleanupUnit": "历史记录",
-  "psh.cleanupDescription": "只清理方案的历史记录，不影响方案本身。",
+  "psh.cleanupDescription": "只清理「{project}」在这些版本里的记录：别的项目的还原点一个不少，方案本身也不受影响。",
   "psh.focusNavTitle": "「{name}」的变更历史",
   "psh.focusActionRestore": "恢复这份方案到这一版",
   "psh.focusRestoreConfirmTitle": "把「{name}」恢复到 {time} 的样子？",
@@ -287,7 +298,7 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
 
   // ---- 变量编辑表单 ----
   "ev.keyEmptyError": "变量名不能为空",
-  "ev.keyInvalidError": "变量名不合法，必须以字母或下划线开头，仅包含字母数字下划线",
+  "ev.keyInvalidError": "变量名不合法，只能包含字母、数字、下划线、点和短横线",
   "ev.keyTitle": "变量名 (KEY)",
   "ev.keyPlaceholder": "例如: DATABASE_URL, PORT",
   "ev.valueTitle": "变量值 (VALUE)",
@@ -300,6 +311,7 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "ev.quoteNone": "无引号 (无特殊字符推荐)",
   "ev.quoteDouble": '双引号 "..."',
   "ev.quoteSingle": "单引号 '...'",
+  "ev.quoteBacktick": "反引号 `...`",
   "ev.disabledLabel": "注释禁用此变量 (在 .env 中以前缀 # 存储)",
   "ev.secretLabel": "标记为敏感字段 (在列表中自动脱敏打码)",
   "ev.encryptedWarning":
@@ -312,9 +324,10 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   // ---- 新建环境文件表单 ----
   "cf.description": "在项目目录下新建一个空的环境文件，创建后会自动切换过去。",
   "cf.suffixTitle": "环境名称",
-  "cf.suffixPlaceholder": "例如: development, staging, feature_x",
+  "cf.suffixPlaceholder": "例如: development, staging, development.local",
   "cf.suffixEmptyError": "请输入环境名称",
-  "cf.suffixInvalidError": "环境名称只能包含字母、数字、下划线、短横线",
+  "cf.suffixInvalidError": "环境名称只能包含字母、数字、下划线、短横线，可以用点分成几段",
+  "cf.templateNameError": "{filename} 是模板文件，不作为环境文件管理；要生成模板请用「生成 / 更新 .env.example」",
   "cf.previewFilename": "将创建文件: {filename}",
   "cf.alreadyExistsError": "{filename} 已存在，请换一个名称",
   "cf.submitTitle": "新建环境文件",
@@ -423,6 +436,8 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
     "会从 {file} 移除 Env Butler 写入的这一行：\n\n{sourceLine}\n\n之后新开的终端窗口就不会再加载你在 Shell 轨配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
   "st.disableConfirmAction": "移除",
   "st.disabledIntegrationToast": "已从 {file} 移除，Shell 集成已禁用",
+  "st.disableNotFoundTitle": "{file} 里没有找到 Env Butler 写入的那一行",
+  "st.disableNotFoundMessage": "可能已经手动删除过；Shell 集成本来就没有接入",
   "st.disableFailedTitle": "禁用失败",
   "st.bootstrapDetailMarkdown": `# 为什么要做这一步？
 
@@ -475,6 +490,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "st.deleteConfirmTitle": "删除片段: {name}",
   "st.deleteConfirmMessage": "确定要移除该片段吗？",
   "st.enabledTag": "已生效",
+  "st.enabledInactiveTag": "已启用（Shell 集成未接入，暂不生效）",
   "st.disabledTag": "已停用",
   "st.detailType": "类型",
   "st.detailStatus": "状态",
@@ -528,6 +544,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "sh.cleanupUnit": "快照",
   "sh.cleanupConfirmMessage": "删掉之后就找不回来了。剩下的 {kept} 份不受影响。",
   "sh.cleanupDoneToast": "已删除 {count} 份{unit}",
+  "sh.cleanupFailedTitle": "清理中途出错，已停下",
   "sh.restoreConfirmTitle": "回滚到快照: {timestamp}",
   "sh.restoreConfirmMessage":
     "确定要将 {file} 还原至该历史版本吗？当前文件将在还原前自动打一份新快照备份，确保绝不丢失数据。",
@@ -665,6 +682,15 @@ const en: Record<DictKey, string> = {
   "cfg.tooNewSubtitle":
     "File version {version}, this build only understands up to {current}. The original was renamed to {name} — update the extension and rename it back to restore it",
   "cfg.showBackup": "Show Original File in Finder",
+  "cfg.unreadableTitle": "Could not read the config file — check its permissions",
+  "cfg.unreadableSubtitle":
+    "{name} is still in place but could not be read. Nothing will be written until it is fixed, so it is not overwritten",
+  "cfg.notQuarantinedSubtitle":
+    "{name} could not be moved aside and is still in place. Nothing will be written until it is fixed, so it is not overwritten",
+  "cfg.writeBlockedUnreadable":
+    "{name} could not be read, so nothing was saved to avoid overwriting it. Check the file permissions",
+  "cfg.writeBlockedCorrupted":
+    "{name} is damaged and still in place, so nothing was saved to avoid overwriting it. Fix it or move it aside first",
 
   "mv.searchPlaceholderProjects": "Search registered projects...",
   "mv.trackTooltip": "Switch Track",
@@ -709,8 +735,8 @@ const en: Record<DictKey, string> = {
   "addProject.failToast": "Failed to Add Project",
 
   "pd.readFailedTitle": "Failed to Read Env File",
-  "pd.secretOnToast": "Marked as sensitive field",
-  "pd.secretOffToast": "Unmarked as sensitive field",
+  "pd.secretOnToast": "Marked as sensitive (this project only)",
+  "pd.secretOffToast": "Unmarked as sensitive (this project only)",
   "pd.conflictTitle": "External Modification Conflict Detected",
   "pd.conflictMessage":
     '{file} was modified by another program while you were editing. Choose "Discard Mine" to drop your changes and load the latest content; choose "Force Overwrite" to overwrite the external changes with yours.',
@@ -782,6 +808,10 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "pd.actionCopyAsMainEnv": "Copy Current Environment as .env",
   "pd.lockTooltip": "Sensitive field (masked)",
   "pd.disabledTag": "Commented",
+  "pd.duplicateTag": "Duplicate",
+  "pd.exportTooltip": "This line has an export prefix. dotenv accepts it, and it also works when sourced into a shell",
+  "pd.duplicateTooltip":
+    "{key} appears on {count} lines. Most loaders only honor one of them (dotenv keeps the first, some keep the last). Keep a single line",
   "pd.deleteConfirmTitle": "Delete Variable: {key}",
   "pd.deleteConfirmMessage":
     "Are you sure you want to remove {key} from {file}? A backup snapshot will be created automatically before the change.",
@@ -794,6 +824,9 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "pd.fillFailedTitle": "Fill Failed",
 
   "raw.contentTitle": "Content",
+  "raw.notSavedTitle": "Not Saved",
+  "raw.notSavedMessage":
+    "Your text is still in the editor. The file has been reloaded with the external changes; saving again will use what is in the editor",
 
   "ps.sectionTitle": "Profiles",
   "ps.applyMenuTitle": "Apply Profile",
@@ -900,14 +933,15 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "psh.infoCount": "Profiles",
   "psh.contentHeading": "This Project's Profiles at That Time",
   "psh.contentEmpty": "(none at that time)",
-  "psh.actionCopy": "Copy This Record",
+  "psh.actionCopy": "Copy This Version (This Project Only)",
   "psh.actionDelete": "Delete This Record",
   "psh.deleteConfirmTitle": "Delete this history record?",
   "psh.deleteConfirmMessage": "Delete {filename}. This cannot be undone.",
   "psh.deletedToast": "Deleted",
   "psh.actionCleanup": "Clean Up Old Records",
   "psh.cleanupUnit": "records",
-  "psh.cleanupDescription": "Only history records are removed; profiles themselves are untouched.",
+  "psh.cleanupDescription":
+    'Only removes what "{project}" recorded in these versions. Other projects keep every restore point, and profiles themselves are untouched.',
   "psh.focusNavTitle": "History of “{name}”",
   "psh.focusActionRestore": "Restore This Profile to This Version",
   "psh.focusRestoreConfirmTitle": "Restore “{name}” to how it was at {time}?",
@@ -922,7 +956,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ps.actionFocusHistory": "View This Profile's History",
 
   "ev.keyEmptyError": "Variable name cannot be empty",
-  "ev.keyInvalidError": "Invalid variable name: must start with a letter or underscore, letters/digits/underscore only",
+  "ev.keyInvalidError": "Invalid variable name: only letters, digits, underscore, dot and hyphen are allowed",
   "ev.keyTitle": "Key",
   "ev.keyPlaceholder": "e.g. DATABASE_URL, PORT",
   "ev.valueTitle": "Value",
@@ -935,6 +969,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ev.quoteNone": "No quotes (recommended without special chars)",
   "ev.quoteDouble": 'Double quotes "..."',
   "ev.quoteSingle": "Single quotes '...'",
+  "ev.quoteBacktick": "Backticks `...`",
   "ev.disabledLabel": "Comment out this variable (stored as # prefix in .env)",
   "ev.secretLabel": "Mark as sensitive (auto-masked in list view)",
   "ev.encryptedWarning":
@@ -947,9 +982,11 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
 
   "cf.description": "Create a new empty environment file in the project directory; it will switch to it automatically.",
   "cf.suffixTitle": "Environment Name",
-  "cf.suffixPlaceholder": "e.g. development, staging, feature_x",
+  "cf.suffixPlaceholder": "e.g. development, staging, development.local",
   "cf.suffixEmptyError": "Please enter an environment name",
-  "cf.suffixInvalidError": "Only letters, digits, underscore and hyphen are allowed",
+  "cf.suffixInvalidError": "Only letters, digits, underscore and hyphen are allowed; use dots to add segments",
+  "cf.templateNameError":
+    '{filename} is a template file and is not managed as an environment file. Use "Generate / Update .env.example" instead',
   "cf.previewFilename": "Will create file: {filename}",
   "cf.alreadyExistsError": "{filename} already exists, please choose another name",
   "cf.submitTitle": "Create Env File",
@@ -1059,6 +1096,8 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
     "This removes the line Env Butler wrote to {file}:\n\n{sourceLine}\n\nNew terminal windows will stop loading the variables/aliases/snippets from your Shell track (already-open windows are unaffected). Remove it?",
   "st.disableConfirmAction": "Remove",
   "st.disabledIntegrationToast": "Removed from {file} — Shell integration disabled",
+  "st.disableNotFoundTitle": "No Env Butler line found in {file}",
+  "st.disableNotFoundMessage": "It may have been removed by hand; Shell integration was not connected",
   "st.disableFailedTitle": "Disable Failed",
   "st.bootstrapDetailMarkdown": `# Why is this step needed?
 
@@ -1111,6 +1150,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "st.deleteConfirmTitle": "Delete Snippet: {name}",
   "st.deleteConfirmMessage": "Are you sure you want to remove this snippet?",
   "st.enabledTag": "Active",
+  "st.enabledInactiveTag": "Enabled (Shell integration not connected, so not active yet)",
   "st.disabledTag": "Disabled",
   "st.detailType": "Type",
   "st.detailStatus": "Status",
@@ -1163,6 +1203,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "sh.cleanupUnit": "snapshots",
   "sh.cleanupConfirmMessage": "There is no way to get them back. The remaining {kept} are untouched.",
   "sh.cleanupDoneToast": "Deleted {count} {unit}",
+  "sh.cleanupFailedTitle": "Cleanup stopped because of an error",
   "sh.restoreConfirmTitle": "Restore Snapshot: {timestamp}",
   "sh.restoreConfirmMessage":
     "Are you sure you want to restore {file} to this historical version? The current file will be backed up automatically before restoring, so nothing is ever lost.",

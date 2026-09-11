@@ -102,9 +102,13 @@ export default function Command() {
   }, []);
 
   const handleOpenProject = async (p: ProjectMeta) => {
-    const { data: reg } = await loadRegistry();
-    const updated = touchProject(reg, p.id);
-    await saveRegistry(updated);
+    try {
+      const { data: reg, problem } = await loadRegistry();
+      if (problem) return; // 注册表有问题时别顺手写"最近打开",写入会被挡,也没必要报错打断打开项目
+      await saveRegistry(touchProject(reg, p.id));
+    } catch {
+      // 记不下"最近打开"不影响打开项目
+    }
   };
 
   const handleRemoveProject = async (p: ProjectMeta) => {
@@ -122,18 +126,26 @@ export default function Command() {
 
     if (!confirmed) return;
 
-    const { data: reg } = await loadRegistry();
-    const updated = removeProject(reg, p.id);
-    await saveRegistry(updated);
+    try {
+      const { data: reg } = await loadRegistry();
+      const updated = removeProject(reg, p.id);
+      await saveRegistry(updated);
 
-    // 这个项目的方案一并清掉,不留没人认领的数据。presets.json 有历史,删错了能捞回来。
-    // 方案文件本身读不出来时(problem)就别动它,免得把坏文件当空的写回去
-    const { data: presets, problem } = await loadPresets();
-    if (!problem && listPresetsForProject(presets, p.id).length > 0) {
-      await savePresets(removePresetsForProject(presets, p.id));
+      // 这个项目的方案一并清掉,不留没人认领的数据。presets.json 有历史,删错了能捞回来。
+      // 方案文件本身读不出来时(problem)就别动它,免得把坏文件当空的写回去
+      const { data: presets, problem } = await loadPresets();
+      if (!problem && listPresetsForProject(presets, p.id).length > 0) {
+        await savePresets(removePresetsForProject(presets, p.id));
+      }
+      await refreshProjects();
+      await showToast({ style: Toast.Style.Success, title: t("mv.removedToastTitle", { name: p.name }) });
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("common.saveFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
-    await refreshProjects();
-    await showToast({ style: Toast.Style.Success, title: t("mv.removedToastTitle", { name: p.name }) });
   };
 
   const trackDropdown = (

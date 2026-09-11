@@ -4,10 +4,12 @@ import {
   diffShellSnippets,
   maskShellContent,
   parseShellConfig,
+  sameShellSnippet,
   type ShellConfig,
   type ShellSnippet,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { prettyTimestamp } from "./timeFormat.js";
 import {
   type ConfigSnapshotItem,
   deleteConfigSnapshot,
@@ -28,20 +30,6 @@ interface ShellConfigHistoryViewProps {
    * 很容易凑出一个从来没存在过的组合(比如 A 回到旧值、B 还是新值,而两者本来是配套的)。
    */
   focusSnippet?: { id: string; name: string };
-}
-
-/** 判断两个版本里的同一个片段是否一模一样(都不存在也算一样) */
-function sameSnippet(a: ShellSnippet | undefined, b: ShellSnippet | undefined): boolean {
-  if (!a && !b) return true;
-  if (!a || !b) return false;
-  return (
-    a.name === b.name &&
-    a.type === b.type &&
-    a.content === b.content &&
-    a.enabled === b.enabled &&
-    a.containsSecret === b.containsSecret &&
-    a.description === b.description
-  );
 }
 
 /**
@@ -105,7 +93,8 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
   const visibleItems = focusSnippet
     ? items.filter((item, idx) => {
         const older = items[idx + 1];
-        return !sameSnippet(
+        // 比对函数用 core 那份:此前这里自己抄了一份,加 group 字段时漏改,只改分组的版本在历史里就消失了
+        return !sameShellSnippet(
           snippetIn(allContents.get(item.filename)),
           snippetIn(older && allContents.get(older.filename)),
         );
@@ -142,7 +131,14 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
   };
 
   const handleRestore = async (item: ConfigSnapshotItem) => {
-    const config = parseOrNull(previewText);
+    // 按选中项的文件重新读,不用预览缓存:预览是异步填的,方向键切得快再立刻按恢复,缓存里可能还是上一版
+    let text = "";
+    try {
+      text = await readConfigSnapshot(item.filePath);
+    } catch {
+      text = "";
+    }
+    const config = parseOrNull(text);
     if (!config) {
       await showToast({ style: Toast.Style.Failure, title: t("sch.restoreFailedTitle"), message: t("sch.unreadable") });
       return;
@@ -158,7 +154,7 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
       : [];
 
     const confirmed = await confirmAlert({
-      title: t("sch.restoreConfirmTitle", { time: item.timestampStr }),
+      title: t("sch.restoreConfirmTitle", { time: prettyTimestamp(item.timestampStr) }),
       message: !focusSnippet
         ? t("sch.restoreConfirmMessage")
         : alsoAffected.length === 0
@@ -218,7 +214,7 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
     if (fromText === null) return t("diff.noPrev");
     const from = snippetIn(fromText);
     const to = snippetIn(toText);
-    if (sameSnippet(from, to)) return t("sch.focusUnchanged");
+    if (sameShellSnippet(from, to)) return t("sch.focusUnchanged");
     if (!from && to) return `${t("diff.added")} \`${to.name}\``;
     if (from && !to) return `${t("diff.removed")} \`${from.name}\``;
     const renamed = from && to && from.name !== to.name ? ` ${t("diff.renamed", { name: from.name })}` : "";
@@ -232,7 +228,7 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
     const info = [
       `### ${t("sch.infoHeading")}`,
       "",
-      `**${t("sch.infoRecordedAt")}**: \`${item.timestampStr}\``,
+      `**${t("sch.infoRecordedAt")}**: \`${prettyTimestamp(item.timestampStr)}\``,
       "",
       `**${t("sch.infoSnippetCount")}**: \`${snapshot.snippets.length}\``,
       "",
@@ -304,7 +300,7 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
             key={item.filename}
             id={item.filename}
             icon={Icon.Clock}
-            title={item.timestampStr}
+            title={prettyTimestamp(item.timestampStr)}
             detail={<List.Item.Detail markdown={selectedId === item.filename ? buildMarkdown(item) : ""} />}
             actions={
               <ActionPanel>

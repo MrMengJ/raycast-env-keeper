@@ -1,14 +1,15 @@
 import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { readFile } from "node:fs/promises";
 import { useEffect, useState } from "react";
-import { diffEnvVariables, isSecretKey, maskSecret, parseEnv } from "@env-butler/core";
+import { diffEnvVariables, isSecretKey, maskSecret, parseEnv, type ProjectMeta } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { prettyTimestamp } from "./timeFormat.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
 import { diffSection, formatEnvDiff } from "./diffFormat.js";
 import { SnapshotCleanupForm } from "./SnapshotCleanupForm.js";
 
 interface SnapshotHistoryViewProps {
-  projectName: string;
+  project: Pick<ProjectMeta, "id" | "name">;
   envFilename: string;
   envFilePath: string;
   /** 当前(磁盘上最新保存)的完整文件内容,用于跟快照做差异对比 */
@@ -18,7 +19,7 @@ interface SnapshotHistoryViewProps {
 }
 
 export function SnapshotHistoryView({
-  projectName,
+  project,
   envFilename,
   envFilePath,
   currentContent,
@@ -56,14 +57,21 @@ export function SnapshotHistoryView({
     }
   };
 
-  const refreshSnapshots = async () => {
+  /** 重新读列表。选中项已经不在列表里(刚被删掉)时,右侧不能还停在它上面,重选第一份 */
+  const refreshSnapshots = async (current: SnapshotItem | null = selectedSnapshot) => {
     setLoading(true);
     try {
-      const items = await listSnapshots(projectName, envFilename);
+      const items = await listSnapshots(project, envFilename);
       setSnapshots(items);
+      const stillThere = current && items.some((s) => s.filename === current.filename);
       const first = items[0];
-      if (first && !selectedSnapshot) {
-        await loadPreview(items, first);
+      if (!stillThere) {
+        if (first) await loadPreview(items, first);
+        else {
+          setSelectedSnapshot(null);
+          setPreviewContent("");
+          setPrevContent(null);
+        }
       }
     } finally {
       setLoading(false);
@@ -72,7 +80,7 @@ export function SnapshotHistoryView({
 
   useEffect(() => {
     refreshSnapshots();
-  }, [projectName, envFilename]);
+  }, [project.id, envFilename]);
 
   const handleSelectionChange = async (id: string | null) => {
     const item = snapshots.find((s) => s.filename === id);
@@ -81,7 +89,7 @@ export function SnapshotHistoryView({
 
   const handleRestore = async (item: SnapshotItem) => {
     const confirmed = await confirmAlert({
-      title: t("sh.restoreConfirmTitle", { timestamp: item.timestampStr }),
+      title: t("sh.restoreConfirmTitle", { timestamp: prettyTimestamp(item.timestampStr) }),
       message: t("sh.restoreConfirmMessage", { file: envFilename }),
       primaryAction: {
         title: t("sh.restoreConfirmAction"),
@@ -96,7 +104,7 @@ export function SnapshotHistoryView({
 
     try {
       const result = await restoreSnapshot({
-        projectName,
+        project,
         snapshotFilePath: item.filePath,
         targetEnvFilePath: envFilePath,
       });
@@ -137,7 +145,7 @@ export function SnapshotHistoryView({
 
     await deleteSnapshot(item.filePath);
     await showToast({ style: Toast.Style.Success, title: t("sh.deletedToast") });
-    await refreshSnapshots();
+    await refreshSnapshots(selectedSnapshot?.filename === item.filename ? null : selectedSnapshot);
   };
 
   const displayVal = (key: string, value: string | undefined) => {
@@ -172,7 +180,7 @@ export function SnapshotHistoryView({
       "",
       `**${t("sh.infoTargetFile")}**: \`${item.envFilename}\``,
       "",
-      `**${t("sh.infoRecordedAt")}**: \`${item.timestampStr}\``,
+      `**${t("sh.infoRecordedAt")}**: \`${prettyTimestamp(item.timestampStr)}\``,
       "",
       `**${t("sh.infoFileSize")}**: \`${item.size} bytes\``,
       "",
@@ -207,7 +215,7 @@ export function SnapshotHistoryView({
             key={item.filename}
             id={item.filename}
             icon={Icon.Clock}
-            title={item.timestampStr}
+            title={prettyTimestamp(item.timestampStr)}
             detail={<List.Item.Detail markdown={buildMarkdown(item)} />}
             actions={
               <ActionPanel>
@@ -231,7 +239,7 @@ export function SnapshotHistoryView({
                       description={t("sh.cleanupDescription", { file: envFilename })}
                       snapshots={snapshots}
                       onDelete={deleteSnapshot}
-                      onCleaned={refreshSnapshots}
+                      onCleaned={() => refreshSnapshots(null)}
                     />
                   }
                 />

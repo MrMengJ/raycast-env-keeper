@@ -12,6 +12,7 @@ import {
 import { t } from "./i18n.js";
 import {
   detectProjectEnvFiles,
+  detectShellRc,
   loadPresets,
   loadRegistry,
   loadShellConfig,
@@ -31,18 +32,22 @@ export default function Command() {
   const [envFiles, setEnvFiles] = useState<{ project: ProjectMeta; filename: string }[]>([]);
   const [presets, setPresets] = useState<{ project: ProjectMeta; preset: Preset }[]>([]);
   const [shell, setShell] = useState<ShellConfig>({ version: 1, snippets: [] });
+  // rc 里没有 source 那一行时,片段再"已启用"也进不了终端,图标不能照旧显示绿色
+  const [integrationActive, setIntegrationActive] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [{ data: reg }, presetsFile, shellConfig] = await Promise.all([
+      const [{ data: reg }, presetsFile, shellConfig, rc] = await Promise.all([
         loadRegistry(),
         loadPresets(),
         loadShellConfig(),
+        detectShellRc(),
       ]);
       setProjects(reg.projects);
       setShell(shellConfig.data);
+      setIntegrationActive(rc.isSourced);
 
       const files = await Promise.all(
         reg.projects.map(async (project) => {
@@ -82,7 +87,12 @@ export default function Command() {
       // 配置文件坏了就别在这里改;去 Shell 轨,那里有完整的提示和处理入口
       await showToast({
         style: Toast.Style.Failure,
-        title: latest.problem.reason === "tooNew" ? t("cfg.tooNewTitle") : t("cfg.corruptedTitle"),
+        title:
+          latest.problem.reason === "tooNew"
+            ? t("cfg.tooNewTitle")
+            : latest.problem.reason === "unreadable"
+              ? t("cfg.unreadableTitle")
+              : t("cfg.corruptedTitle"),
         message: t("jt.problemHint"),
       });
       return;
@@ -179,9 +189,11 @@ export default function Command() {
             <List.Item
               key={`sh_${snippet.id}`}
               icon={
-                snippet.enabled
-                  ? { source: Icon.CheckCircle, tintColor: Color.Green }
-                  : { source: Icon.Pause, tintColor: Color.SecondaryText }
+                !snippet.enabled
+                  ? { source: Icon.Pause, tintColor: Color.SecondaryText }
+                  : integrationActive
+                    ? { source: Icon.CheckCircle, tintColor: Color.Green }
+                    : { source: Icon.CheckCircle, tintColor: Color.SecondaryText }
               }
               title={snippet.name}
               subtitle={

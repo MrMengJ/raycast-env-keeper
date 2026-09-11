@@ -16,7 +16,7 @@ export async function applyPresetToFile(options: {
 }): Promise<WriteEnvResult> {
   const { project, envFilename, preset } = options;
   const result = await writeEnvFileWithSnapshot({
-    projectName: project.name,
+    project,
     envFilePath: join(project.path, envFilename),
     newContent: preset.content,
     force: true,

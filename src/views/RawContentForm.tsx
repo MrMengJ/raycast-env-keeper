@@ -8,7 +8,8 @@ interface RawContentFormProps {
   /** 编辑框下面的一句说明 */
   hint: string;
   submitTitle?: string;
-  onSave: (content: string) => Promise<void>;
+  /** 返回 false 表示这次没有写入(比如用户在冲突框里选了放弃),表单留着,内容不丢 */
+  onSave: (content: string) => Promise<boolean | void>;
 }
 
 /**
@@ -22,7 +23,16 @@ export function RawContentForm({ navTitle, initialContent, hint, submitTitle, on
 
   const handleSubmit = async () => {
     try {
-      await onSave(content);
+      const saved = await onSave(content);
+      if (saved === false) {
+        // 此前这里照样关闭表单,用户刚敲的一整段内容就没了——这是全应用唯一没有退路的写入路径
+        await showToast({
+          style: Toast.Style.Failure,
+          title: t("raw.notSavedTitle"),
+          message: t("raw.notSavedMessage"),
+        });
+        return;
+      }
       pop();
     } catch (e) {
       await showToast({

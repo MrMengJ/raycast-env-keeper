@@ -1,8 +1,20 @@
-import { copyFile, mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
+  type ProjectMeta,
   type RegistryData,
   createEmptyRegistry,
   formatRegistry,
@@ -27,7 +39,9 @@ import {
   formatPresetsFile,
   parsePresetsFile,
   CURRENT_PRESETS_VERSION,
+  isEnvFilename,
 } from "@env-butler/core";
+import { t } from "../i18n.js";
 
 const BASE_DIR = join(homedir(), ".env-butler");
 const REGISTRY_FILE = join(BASE_DIR, "registry.json");
@@ -218,11 +232,23 @@ export async function deleteConfigSnapshot(filePath: string): Promise<void> {
   if (existsSync(filePath)) await unlink(filePath);
 }
 
+/**
+ * 改写一份历史记录的内容,但保留它原来的时间。
+ * 方案历史按项目清理时不删文件、只摘掉本项目的部分;历史列表按修改时间排序,改写不保时间的话这一份会跳到最前面
+ */
+export async function rewriteConfigSnapshot(filePath: string, content: string): Promise<void> {
+  const before = await stat(filePath);
+  await writeFileAtomic(filePath, content);
+  await utimes(filePath, before.atime, before.mtime);
+}
+
 /** 配置文件读不出来时的情况说明,交给界面告诉用户发生了什么 */
 export interface ConfigLoadProblem {
   reason: ConfigFailureReason;
-  /** 原文件被挪到了哪里(绝对路径),数据还在里面 */
+  /** 原文件现在在哪(绝对路径):挪开成功是新名字,没挪开(或读不出来)就是原路径 */
   backupPath: string;
+  /** 原文件有没有被成功挪到一边。没挪开时它还在原位,一保存就会被覆盖,所以写入会被挡住 */
+  quarantined: boolean;
   /** 仅 tooNew 时有值:文件里声明的版本号 */
   fileVersion?: number;
   /** 当前扩展支持到的版本,给界面组织提示文案用 */
@@ -246,17 +272,44 @@ async function quarantineConfigFile(
   const reason: ConfigFailureReason = error instanceof ConfigFileError ? error.reason : "malformed";
   const suffix = reason === "tooNew" ? "unsupported" : "corrupted";
   const backupPath = `${filePath}.${suffix}-${fileTimestamp()}`;
+  let quarantined = true;
   try {
     await rename(filePath, backupPath);
   } catch {
-    // 连改名都失败(权限等),至少把路径报出去让用户自己看
+    // 连改名都失败(权限等):如实说"没挪开",原文件还在原位;此前这里照样报"已挪到 xxx",用户一保存就把它盖了
+    quarantined = false;
   }
   return {
     reason,
-    backupPath,
+    backupPath: quarantined ? backupPath : filePath,
+    quarantined,
     fileVersion: error instanceof ConfigFileError ? error.fileVersion : undefined,
     currentVersion,
   };
+}
+
+/** 文件在但读不出来(权限、IO):不是"没配过",要明确报出来,而且不能写 */
+function unreadableProblem(filePath: string, currentVersion: number): ConfigLoadProblem {
+  return { reason: "unreadable", backupPath: filePath, quarantined: false, currentVersion };
+}
+
+/**
+ * 写配置文件之前的最后一道闸:文件在、却读不出来或解析不了,说明它还留着用户的数据而界面拿到的是空的,
+ * 这时写入就是覆盖。不管界面有没有把问题条显示出来,这里一律拒绝
+ */
+async function assertConfigWritable(filePath: string, parse: (content: string) => unknown): Promise<void> {
+  if (!existsSync(filePath)) return;
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch {
+    throw new Error(t("cfg.writeBlockedUnreadable", { name: basename(filePath) }));
+  }
+  try {
+    parse(content);
+  } catch {
+    throw new Error(t("cfg.writeBlockedCorrupted", { name: basename(filePath) }));
+  }
 }
 
 export function getShellScriptPath(): string {
@@ -522,8 +575,8 @@ export async function loadRegistry(): Promise<LoadResult<RegistryData>> {
   try {
     content = await readFile(REGISTRY_FILE, "utf8");
   } catch {
-    // 读不到文件(权限等)不等于文件坏了,不隔离,直接当空处理
-    return { data: createEmptyRegistry() };
+    // 读不到文件(权限等)不等于文件坏了,不隔离;但也绝不能当成"没配过"——那样用户重建一保存就把原文件盖了
+    return { data: createEmptyRegistry(), problem: unreadableProblem(REGISTRY_FILE, CURRENT_REGISTRY_VERSION) };
   }
 
   try {
@@ -542,6 +595,7 @@ export async function loadRegistry(): Promise<LoadResult<RegistryData>> {
  */
 export async function saveRegistry(registry: RegistryData): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
+  await assertConfigWritable(REGISTRY_FILE, parseRegistry);
   const next = formatRegistry(registry);
   const snapshot = await snapshotConfigBeforeWrite("registry", REGISTRY_FILE, next);
   await writeFileAtomic(REGISTRY_FILE, next);
@@ -563,7 +617,10 @@ export async function loadShellConfig(): Promise<LoadResult<ShellConfig>> {
   try {
     content = await readFile(SHELL_CONFIG_FILE, "utf8");
   } catch {
-    return { data: createEmptyShellConfig() };
+    return {
+      data: createEmptyShellConfig(),
+      problem: unreadableProblem(SHELL_CONFIG_FILE, CURRENT_SHELL_CONFIG_VERSION),
+    };
   }
 
   try {
@@ -581,6 +638,7 @@ export async function loadShellConfig(): Promise<LoadResult<ShellConfig>> {
  */
 export async function saveShellConfig(config: ShellConfig): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
+  await assertConfigWritable(SHELL_CONFIG_FILE, parseShellConfig);
   const next = formatShellConfig(config);
   const snapshot = await snapshotConfigBeforeWrite("shell", SHELL_CONFIG_FILE, next);
   await writeFileAtomic(SHELL_CONFIG_FILE, next);
@@ -607,7 +665,7 @@ export async function loadPresets(): Promise<LoadResult<PresetsFile>> {
   try {
     content = await readFile(PRESETS_FILE, "utf8");
   } catch {
-    return { data: createEmptyPresetsFile() };
+    return { data: createEmptyPresetsFile(), problem: unreadableProblem(PRESETS_FILE, CURRENT_PRESETS_VERSION) };
   }
 
   try {
@@ -622,6 +680,7 @@ export async function loadPresets(): Promise<LoadResult<PresetsFile>> {
 
 export async function savePresets(file: PresetsFile): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
+  await assertConfigWritable(PRESETS_FILE, parsePresetsFile);
   const next = formatPresetsFile(file);
   const snapshot = await snapshotConfigBeforeWrite("presets", PRESETS_FILE, next);
   await writeFileAtomic(PRESETS_FILE, next);
@@ -642,15 +701,15 @@ export async function readShellScript(): Promise<string> {
 }
 
 /**
- * 扫描项目根目录下的所有 .env* 文件
+ * 扫描项目根目录下的环境文件。
+ * 用白名单(core 的 isEnvFilename)而不是"以 .env 开头":`.envrc` 是 direnv 的 shell 脚本,
+ * 设计上绝不能碰,此前却会被列进下拉框里可编辑可覆写;`.env_副本` / `.environment` 也都不是环境文件
  */
 export async function detectProjectEnvFiles(projectPath: string): Promise<string[]> {
   if (!existsSync(projectPath)) return [];
   try {
     const entries = await readdir(projectPath, { withFileTypes: true });
-    const envFiles = entries
-      .filter((e) => e.isFile() && e.name.startsWith(".env") && e.name !== ".env.example")
-      .map((e) => e.name);
+    const envFiles = entries.filter((e) => e.isFile() && isEnvFilename(e.name)).map((e) => e.name);
 
     if (!envFiles.includes(".env")) {
       envFiles.unshift(".env");
@@ -704,6 +763,34 @@ export async function readEnvFile(
   };
 }
 
+/** 目录名只允许安全字符;老项目的 id 是路径的 base64,可能带 `/` */
+function safeDirName(name: string): string {
+  return name.replace(/[/\\?%*:|"<>]/g, "_");
+}
+
+/** 快照目录的寻址用的是项目 id 而不是项目名 */
+export type SnapshotProjectRef = Pick<ProjectMeta, "id" | "name">;
+
+/**
+ * 某个项目的快照目录。按 **id** 寻址:此前按项目名,两个都叫 `web` 的项目历史会混在一起,
+ * 回滚时可能把另一个项目的内容写进来。
+ * 老目录(按名字)第一次被访问时改名成新目录,历史不丢;两个同名项目共用过的老目录归先访问的那个
+ */
+async function projectSnapshotDir(project: SnapshotProjectRef): Promise<string> {
+  const byId = join(SNAPSHOTS_DIR, safeDirName(project.id));
+  if (existsSync(byId)) return byId;
+  const byName = join(SNAPSHOTS_DIR, safeDirName(project.name));
+  if (existsSync(byName)) {
+    try {
+      await rename(byName, byId);
+    } catch {
+      // 改不了名就继续用老目录,别让快照功能因此失效
+      return byName;
+    }
+  }
+  return byId;
+}
+
 export interface WriteEnvResult {
   success: boolean;
   conflict?: boolean;
@@ -722,13 +809,13 @@ export interface WriteEnvResult {
  * 写入环境文件（包含冲突检测 + 自动快照备份）
  */
 export async function writeEnvFileWithSnapshot(options: {
-  projectName: string;
+  project: SnapshotProjectRef;
   envFilePath: string;
   newContent: string;
   expectedFingerprint?: string;
   force?: boolean;
 }): Promise<WriteEnvResult> {
-  const { projectName, envFilePath, newContent, expectedFingerprint, force = false } = options;
+  const { project, envFilePath, newContent, expectedFingerprint, force = false } = options;
 
   await ensureStorageDirs();
 
@@ -747,20 +834,19 @@ export async function writeEnvFileWithSnapshot(options: {
   let snapshotLimitExceeded = false;
   if (existsSync(envFilePath)) {
     const oldContent = await readFile(envFilePath, "utf8");
-    const safeProjectName = projectName.replace(/[/\\?%*:|"<>]/g, "_");
-    const projectSnapshotDir = join(SNAPSHOTS_DIR, safeProjectName);
-    if (!existsSync(projectSnapshotDir)) {
-      await mkdir(projectSnapshotDir, { recursive: true });
+    const snapshotDir = await projectSnapshotDir(project);
+    if (!existsSync(snapshotDir)) {
+      await mkdir(snapshotDir, { recursive: true });
     }
 
     const snapshotFilename = generateSnapshotFilename(basename(envFilePath));
-    snapshotPath = await uniqueSnapshotPath(projectSnapshotDir, snapshotFilename);
+    snapshotPath = await uniqueSnapshotPath(snapshotDir, snapshotFilename);
     await writeFileAtomic(snapshotPath, oldContent);
 
     // 打完快照后数一下这个项目累计了多少份。超过软上限只是提示用户按需清理,
     // 不自动删除——快照是安全网,自动清理与这个定位相冲突(设计决议 Q12)
     try {
-      const entries = await readdir(projectSnapshotDir, { withFileTypes: true });
+      const entries = await readdir(snapshotDir, { withFileTypes: true });
       snapshotCount = entries.filter((e) => e.isFile() && parseSnapshotFilename(e.name) !== null).length;
       snapshotLimitExceeded = checkSnapshotSoftLimit(snapshotCount).exceeded;
     } catch {
@@ -798,13 +884,12 @@ export interface SnapshotItem {
 /**
  * 获取指定项目的所有快照
  */
-export async function listSnapshots(projectName: string, targetEnvFilename?: string): Promise<SnapshotItem[]> {
-  const safeProjectName = projectName.replace(/[/\\?%*:|"<>]/g, "_");
-  const projectSnapshotDir = join(SNAPSHOTS_DIR, safeProjectName);
-  if (!existsSync(projectSnapshotDir)) return [];
+export async function listSnapshots(project: SnapshotProjectRef, targetEnvFilename?: string): Promise<SnapshotItem[]> {
+  const snapshotDir = await projectSnapshotDir(project);
+  if (!existsSync(snapshotDir)) return [];
 
   try {
-    const entries = await readdir(projectSnapshotDir, { withFileTypes: true });
+    const entries = await readdir(snapshotDir, { withFileTypes: true });
     const items: SnapshotItem[] = [];
 
     for (const entry of entries) {
@@ -816,7 +901,7 @@ export async function listSnapshots(projectName: string, targetEnvFilename?: str
         continue;
       }
 
-      const filePath = join(projectSnapshotDir, entry.name);
+      const filePath = join(snapshotDir, entry.name);
       const fileStat = await stat(filePath);
       items.push({
         filename: entry.name,
@@ -839,17 +924,17 @@ export async function listSnapshots(projectName: string, targetEnvFilename?: str
  * 从指定快照回滚到目标环境文件（回滚前自动给当前文件打一份安全快照）
  */
 export async function restoreSnapshot(options: {
-  projectName: string;
+  project: SnapshotProjectRef;
   snapshotFilePath: string;
   targetEnvFilePath: string;
 }): Promise<WriteEnvResult> {
-  const { projectName, snapshotFilePath, targetEnvFilePath } = options;
+  const { project, snapshotFilePath, targetEnvFilePath } = options;
   if (!existsSync(snapshotFilePath)) {
     return { success: false, error: "快照文件不存在" };
   }
   const snapshotContent = await readFile(snapshotFilePath, "utf8");
   return writeEnvFileWithSnapshot({
-    projectName,
+    project,
     envFilePath: targetEnvFilePath,
     newContent: snapshotContent,
     force: true, // 回滚为明确用户操作，强制覆盖

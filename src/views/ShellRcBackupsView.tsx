@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { maskShellContent } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { prettyTimestamp } from "./timeFormat.js";
 import {
   backupShellRcTo,
   deleteShellRcBackup,
@@ -25,11 +26,6 @@ import {
 } from "../services/storage.js";
 
 /** 20260906-143000 → 2026-09-06 14:30:00 */
-function prettyTimestamp(raw: string): string {
-  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(raw);
-  if (!m) return raw;
-  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`;
-}
 
 /** 备份到自选目录:留空就用扩展自己的备份目录 */
 function BackupToForm({ rcInfo, onDone }: { rcInfo: ShellRcInfo; onDone: () => void }) {

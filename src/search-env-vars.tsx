@@ -2,6 +2,7 @@ import { Action, ActionPanel, Color, Icon, List, showToast, Toast } from "@rayca
 import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
+  type EnvQuote,
   extractShellAssignments,
   findShellConflicts,
   formatKVRaw,
@@ -20,9 +21,10 @@ interface MatchedVariable {
   key: string;
   value: string;
   disabled: boolean;
-  /** 复制整行时要照着原样拼:项目轨有引号形态和行内注释,Shell 轨没有 */
-  quote?: "'" | '"' | null;
+  /** 复制整行时要照着原样拼:项目轨有引号形态、行内注释和 export 前缀,Shell 轨没有 */
+  quote?: EnvQuote | null;
   comment?: string;
+  exportPrefix?: boolean;
   /** 展示用的来源:项目名 或 Shell 轨的片段名 */
   sourceLabel: string;
   /** 项目轨才有;Shell 轨的变量没有对应文件 */
@@ -70,6 +72,7 @@ export default function Command() {
                       disabled: l.disabled,
                       quote: l.quote,
                       comment: l.comment,
+                      exportPrefix: l.exportPrefix,
                       sourceLabel: `${project.name} / ${f}`,
                       project,
                       envFilePath: fullPath,
@@ -124,6 +127,7 @@ export default function Command() {
               disabled: l.disabled,
               quote: l.quote,
               comment: l.comment,
+              exportPrefix: l.exportPrefix,
               sourceLabel: t("search.presetSource", { project: project.name, name: preset.name }),
               project,
               presetName: preset.name,
@@ -176,7 +180,9 @@ export default function Command() {
           const isSecret = isSecretKey(item.key, item.project?.customSecrets);
           const isEncrypted = isEncryptedValue(item.value);
           const isRevealed = revealedSet.has(uniqueId);
-          const displayVal = (isSecret || isEncrypted) && !isRevealed ? maskSecret(item.value) : item.value;
+          const bare = (isSecret || isEncrypted) && !isRevealed ? maskSecret(item.value) : item.value;
+          // 跟项目页一致:有引号就照文件里的样子带引号显示
+          const displayVal = item.quote ? `${item.quote}${bare}${item.quote}` : bare;
 
           return (
             <List.Item
@@ -239,6 +245,7 @@ export default function Command() {
                     content={formatKVRaw(item.key, item.value, {
                       quote: item.quote ?? null,
                       comment: item.comment,
+                      exportPrefix: item.exportPrefix,
                       // 项目轨的"禁用"就是注释掉那一行,照原样带上 #;
                       // Shell 轨的"禁用"是整个片段不生成,行本身并没有被注释
                       disabled: Boolean(item.project) && item.disabled,

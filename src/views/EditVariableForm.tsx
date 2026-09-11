@@ -1,12 +1,12 @@
 import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { isEncryptedValue, isSecretKey } from "@env-butler/core";
+import { ENV_KEY_RE, type EnvQuote, isEncryptedValue, isSecretKey } from "@env-butler/core";
 import { t } from "../i18n.js";
 
 export interface VariableFormData {
   key: string;
   value: string;
-  quote: "'" | '"' | null;
+  quote: EnvQuote | null;
   disabled: boolean;
   isSecret: boolean;
   /** 行内注释正文(不含 `#`);空串表示不要注释 */
@@ -17,7 +17,7 @@ interface EditVariableFormProps {
   initialData?: {
     key: string;
     value: string;
-    quote: "'" | '"' | null;
+    quote: EnvQuote | null;
     disabled: boolean;
     comment?: string;
   };
@@ -32,7 +32,13 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
   const [key, setKey] = useState(initialData?.key ?? "");
   const [value, setValue] = useState(initialData?.value ?? "");
   const [quoteType, setQuoteType] = useState<string>(
-    initialData?.quote === '"' ? "double" : initialData?.quote === "'" ? "single" : "none",
+    initialData?.quote === '"'
+      ? "double"
+      : initialData?.quote === "'"
+        ? "single"
+        : initialData?.quote === "`"
+          ? "backtick"
+          : "none",
   );
   const [disabled, setDisabled] = useState(initialData?.disabled ?? false);
   const [comment, setComment] = useState(initialData?.comment ?? "");
@@ -54,7 +60,8 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
       return;
     }
 
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmedKey)) {
+    // 跟解析器用同一条规则(dotenv 的 [\w.-]+),否则文件里能读出来的变量在这里改一下名就存不回去
+    if (!ENV_KEY_RE.test(trimmedKey)) {
       setKeyError(t("ev.keyInvalidError"));
       return;
     }
@@ -64,7 +71,8 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
       return;
     }
 
-    const quote: "'" | '"' | null = quoteType === "double" ? '"' : quoteType === "single" ? "'" : null;
+    const quote: EnvQuote | null =
+      quoteType === "double" ? '"' : quoteType === "single" ? "'" : quoteType === "backtick" ? "`" : null;
 
     try {
       await onSave({
@@ -143,6 +151,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
         <Form.Dropdown.Item value="none" title={t("ev.quoteNone")} />
         <Form.Dropdown.Item value="double" title={t("ev.quoteDouble")} />
         <Form.Dropdown.Item value="single" title={t("ev.quoteSingle")} />
+        <Form.Dropdown.Item value="backtick" title={t("ev.quoteBacktick")} />
       </Form.Dropdown>
       <Form.Checkbox id="disabled" label={t("ev.disabledLabel")} value={disabled} onChange={setDisabled} />
       <Form.Checkbox

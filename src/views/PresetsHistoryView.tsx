@@ -1,7 +1,9 @@
 import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { useEffect, useState } from "react";
 import {
+  createEmptyPresetsFile,
   diffEnvVariables,
+  formatPresetsFile,
   groupPresets,
   listPresetsForProject,
   parseEnv,
@@ -12,6 +14,7 @@ import {
   restoreProjectPresets,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { prettyTimestamp } from "./timeFormat.js";
 import {
   type ConfigSnapshotItem,
   deleteConfigSnapshot,
@@ -20,6 +23,7 @@ import {
   readConfigSnapshot,
   savePresets,
 } from "../services/storage.js";
+import { cleanProjectPresetHistory } from "../services/presetsHistory.js";
 import { diffBlock, envValueDisplayer, formatEnvContentMasked, formatEnvDiff } from "./diffFormat.js";
 import { SnapshotCleanupForm } from "./SnapshotCleanupForm.js";
 
@@ -143,8 +147,8 @@ export function PresetsHistoryView({
 
     const confirmed = await confirmAlert({
       title: focusPreset
-        ? t("psh.focusRestoreConfirmTitle", { name: focusPreset.name, time: item.timestampStr })
-        : t("psh.restoreConfirmTitle", { time: item.timestampStr }),
+        ? t("psh.focusRestoreConfirmTitle", { name: focusPreset.name, time: prettyTimestamp(item.timestampStr) })
+        : t("psh.restoreConfirmTitle", { time: prettyTimestamp(item.timestampStr) }),
       message: focusPreset
         ? t("psh.focusRestoreConfirmMessage")
         : t("psh.restoreConfirmMessage", { project: projectName }),
@@ -191,6 +195,13 @@ export function PresetsHistoryView({
 
   const show = envValueDisplayer(customSecrets);
 
+  /** 这一版里本项目的那部分。整份文件装着所有项目的方案,"复制这一版"不该把别的项目的密钥一起带走 */
+  const projectSliceText = (item: ConfigSnapshotItem): string => {
+    const file = parseOrNull(allContents.get(item.filename));
+    if (!file) return "";
+    return formatPresetsFile(restoreProjectPresets(createEmptyPresetsFile(), file, projectId));
+  };
+
   /** 单份方案在两个版本之间:新增、删除、改了什么 */
   const focusDiff = (from: Preset | undefined, to: Preset | undefined): string => {
     if (samePreset(from, to)) return t("diff.none");
@@ -236,7 +247,7 @@ export function PresetsHistoryView({
     const info = [
       `### ${t("psh.infoHeading")}`,
       "",
-      `**${t("psh.infoRecordedAt")}**: \`${item.timestampStr}\``,
+      `**${t("psh.infoRecordedAt")}**: \`${prettyTimestamp(item.timestampStr)}\``,
       "",
       `**${t("psh.infoCount")}**: \`${mine.length}\``,
     ];
@@ -327,7 +338,7 @@ export function PresetsHistoryView({
             key={item.filename}
             id={item.filename}
             icon={Icon.Clock}
-            title={item.timestampStr}
+            title={prettyTimestamp(item.timestampStr)}
             detail={<List.Item.Detail markdown={selectedId === item.filename ? buildMarkdown(item) : ""} />}
             actions={
               <ActionPanel>
@@ -339,11 +350,7 @@ export function PresetsHistoryView({
                     onAction={() => handleRestore(item)}
                   />
                 )}
-                <Action.CopyToClipboard
-                  title={t("psh.actionCopy")}
-                  content={allContents.get(item.filename) ?? ""}
-                  concealed
-                />
+                <Action.CopyToClipboard title={t("psh.actionCopy")} content={projectSliceText(item)} concealed />
                 <Action
                   title={t("psh.actionDelete")}
                   icon={Icon.Trash}
@@ -358,9 +365,9 @@ export function PresetsHistoryView({
                     <SnapshotCleanupForm
                       navTitle={t("psh.actionCleanup")}
                       unit={t("psh.cleanupUnit")}
-                      description={t("psh.cleanupDescription")}
-                      snapshots={items}
-                      onDelete={deleteConfigSnapshot}
+                      description={t("psh.cleanupDescription", { project: projectName })}
+                      snapshots={visibleItems}
+                      onCleanupBelow={(oldestKept) => cleanProjectPresetHistory(oldestKept, projectId)}
                       onCleaned={refresh}
                     />
                   }

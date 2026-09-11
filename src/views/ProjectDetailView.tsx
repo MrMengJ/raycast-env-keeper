@@ -15,14 +15,17 @@ import {
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type EnvLine,
   parseEnv,
   serializeEnv,
   addEnvVariable,
-  removeEnvVariable,
-  toggleEnvVariable,
+  countEnvKeys,
+  findEnvLineIndex,
+  removeEnvVariableAt,
+  toggleEnvVariableAt,
+  updateEnvVariableAt,
   mergeExampleEnv,
   generateExampleEnv,
   isSecretKey,
@@ -84,6 +87,9 @@ interface ProjectDetailViewProps {
  */
 const CREATE_ENV_FILE_VALUE = "__env_butler_create_env_file__";
 
+/** 列表项的标识按"第几行"而不是变量名:同一个 key 写两行是常见写法,按名字会撞 */
+const lineItemId = (index: number) => `line_${index}`;
+
 export function ProjectDetailView({
   project,
   onProjectUpdated,
@@ -94,8 +100,10 @@ export function ProjectDetailView({
   const [currentProject, setCurrentProject] = useState<ProjectMeta>(project);
   const [envFiles, setEnvFiles] = useState<string[]>([]);
   const [selectedEnvFile, setSelectedEnvFile] = useState<string>(initialEnvFile ?? ".env");
-  // 只有从全局搜索跳过来时才接管选中项;平时交给 Raycast 自己管,免得跟它的选中逻辑打架
-  const [selectedItemId, setSelectedItemId] = useState<string | undefined>(initialSelectedKey);
+  // 只有从全局搜索跳过来时才接管选中项;平时交给 Raycast 自己管,免得跟它的选中逻辑打架。
+  // 列表项按"第几行"标识(同名两行时按名字会撞),所以要等文件读出来才知道该选哪一项
+  const [selectedItemId, setSelectedItemId] = useState<string | undefined>();
+  const initialSelectionApplied = useRef(false);
   const [lines, setLines] = useState<EnvLine[]>([]);
   const [currentFingerprint, setCurrentFingerprint] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -152,11 +160,18 @@ export function ProjectDetailView({
     }
   }, [selectedEnvFile, currentProject.path]);
 
+  useEffect(() => {
+    if (loading || !initialSelectedKey || initialSelectionApplied.current) return;
+    initialSelectionApplied.current = true;
+    const index = findEnvLineIndex(lines, initialSelectedKey);
+    if (index >= 0) setSelectedItemId(lineItemId(index));
+  }, [loading]);
+
   // 安全保存并打快照
   const saveLines = async (newLines: EnvLine[], force = false): Promise<boolean> => {
     const serialized = serializeEnv(newLines);
     const result = await writeEnvFileWithSnapshot({
-      projectName: currentProject.name,
+      project: currentProject,
       envFilePath: currentEnvFilePath,
       newContent: serialized,
       expectedFingerprint: currentFingerprint,
@@ -229,18 +244,23 @@ export function ProjectDetailView({
     });
   };
 
-  // 保存变量表单编辑
-  const handleSaveVariable = async (data: VariableFormData, oldKey?: string) => {
-    let updatedLines = lines;
-    if (oldKey && oldKey !== data.key) {
-      updatedLines = removeEnvVariable(updatedLines, oldKey);
-    }
-
-    updatedLines = addEnvVariable(updatedLines, data.key, data.value, {
-      quote: data.quote,
-      disabled: data.disabled,
-      comment: data.comment,
-    });
+  // 保存变量表单编辑。编辑按"第几行"定位、原位重建(改名也不会跑到文件末尾);
+  // 新建按名字:已有同名就更新那一行(优先启用的),没有就追加
+  const handleSaveVariable = async (data: VariableFormData, at?: number) => {
+    const updatedLines =
+      at === undefined
+        ? addEnvVariable(lines, data.key, data.value, {
+            quote: data.quote,
+            disabled: data.disabled,
+            comment: data.comment,
+          })
+        : updateEnvVariableAt(lines, at, {
+            key: data.key,
+            value: data.value,
+            quote: data.quote,
+            disabled: data.disabled,
+            comment: data.comment,
+          });
 
     // 如果用户在表单里勾选了自定义敏感
     const isCurrentlySecret = isSecretKey(data.key, currentProject.customSecrets);
@@ -251,14 +271,13 @@ export function ProjectDetailView({
     await saveLines(updatedLines);
   };
 
-  // 切换行启用/禁用 (# KEY=val)
-  const handleToggleEnable = async (key: string) => {
-    const updated = toggleEnvVariable(lines, key);
-    await saveLines(updated);
+  // 切换某一行的启用/禁用 (# KEY=val)。按行不按名字:同名两行时只动这一行
+  const handleToggleEnable = async (at: number) => {
+    await saveLines(toggleEnvVariableAt(lines, at));
   };
 
-  // 删除变量
-  const handleDeleteVariable = async (key: string) => {
+  // 删除某一行
+  const handleDeleteVariable = async (at: number, key: string) => {
     const confirmed = await confirmAlert({
       title: t("pd.deleteConfirmTitle", { key }),
       message: t("pd.deleteConfirmMessage", { file: selectedEnvFile, key }),
@@ -272,8 +291,7 @@ export function ProjectDetailView({
     });
 
     if (!confirmed) return;
-    const updated = removeEnvVariable(lines, key);
-    await saveLines(updated);
+    await saveLines(removeEnvVariableAt(lines, at));
   };
 
   // 生成/更新 .env.example
@@ -312,7 +330,7 @@ export function ProjectDetailView({
 
     // 走快照通道,和 .env 一样有退路
     const result = await writeEnvFileWithSnapshot({
-      projectName: currentProject.name,
+      project: currentProject,
       envFilePath: examplePath,
       newContent: merged.content,
       force: true,
@@ -353,7 +371,7 @@ export function ProjectDetailView({
 
     const currentContent = serializeEnv(lines);
     const result = await writeEnvFileWithSnapshot({
-      projectName: currentProject.name,
+      project: currentProject,
       envFilePath: targetPath,
       newContent: currentContent,
       force: true,
@@ -375,7 +393,7 @@ export function ProjectDetailView({
       const newContent = mode === "structure" ? generateExampleEnv(parseEnv(sourceContent)) : sourceContent;
 
       const result = await writeEnvFileWithSnapshot({
-        projectName: currentProject.name,
+        project: currentProject,
         envFilePath: currentEnvFilePath,
         newContent,
         force: true,
@@ -517,6 +535,72 @@ export function ProjectDetailView({
     }
   };
 
+  /**
+   * 文件级动作(快照历史、生成 example、整份编辑……),启用行、禁用行、空列表三处共用。
+   * 此前只挂在启用行上:文件一旦被清空(误删光、套了空方案)就进不去快照历史,最需要回滚的时候入口没了
+   */
+  const fileActions = (
+    <ActionPanel.Section title={t("pd.sectionEnvAndSnapshot")}>
+      <Action.Push
+        title={t("pd.actionSnapshotHistory")}
+        icon={Icon.Clock}
+        shortcut={Keyboard.Shortcut.Common.Duplicate}
+        target={
+          <SnapshotHistoryView
+            project={currentProject}
+            envFilename={selectedEnvFile}
+            envFilePath={currentEnvFilePath}
+            currentContent={serializeEnv(lines)}
+            customSecrets={currentProject.customSecrets}
+            onRestored={loadCurrentEnvContent}
+          />
+        }
+      />
+      <Action
+        title={t("pd.actionGenerateExample")}
+        icon={Icon.Document}
+        shortcut={{ modifiers: ["cmd"], key: "g" }}
+        onAction={handleGenerateExample}
+      />
+      {selectedEnvFile !== ".env" && (
+        <Action
+          title={t("pd.actionCopyAsMainEnv")}
+          icon={Icon.Duplicate}
+          shortcut={Keyboard.Shortcut.Common.Copy}
+          onAction={handleCopyAsMainEnv}
+        />
+      )}
+      <Action.Push
+        title={t("pd.createEnvFileItem")}
+        icon={Icon.NewDocument}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
+        target={
+          <CreateEnvFileForm
+            projectPath={currentProject.path}
+            onCreated={async (filename) => {
+              await refreshEnvFiles();
+              setSelectedEnvFile(filename);
+            }}
+          />
+        }
+      />
+      <Action.Push
+        title={t("pd.actionEditRaw")}
+        icon={Icon.TextDocument}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
+        target={
+          <RawContentForm
+            navTitle={t("pd.editRawNavTitle", { file: selectedEnvFile })}
+            initialContent={currentContent}
+            hint={t("pd.editRawHint")}
+            onSave={(content) => saveLines(parseEnv(content))}
+          />
+        }
+      />
+      <Action.OpenWith title={t("mv.actionOpenWith")} path={currentEnvFilePath} />
+    </ActionPanel.Section>
+  );
+
   /** 方案相关的一组动作,启用区、禁用区、空列表三处共用 */
   const presetActions = (
     <ActionPanel.Section title={t("ps.sectionTitle")}>
@@ -606,9 +690,39 @@ export function ProjectDetailView({
     });
   };
 
-  const kvLines = lines.filter((l): l is Extract<EnvLine, { type: "kv" }> => l.type === "kv");
-  const enabledKvs = kvLines.filter((l) => !l.disabled);
-  const disabledKvs = kvLines.filter((l) => l.disabled);
+  // 每一项带上"第几行":列表项的标识、编辑 / 启停 / 删除全按行走,同名两行互不干扰
+  const kvEntries = lines
+    .map((line, index) => ({ line, index }))
+    .filter((e): e is { line: Extract<EnvLine, { type: "kv" }>; index: number } => e.line.type === "kv");
+  const enabledKvs = kvEntries.filter((e) => !e.line.disabled);
+  const disabledKvs = kvEntries.filter((e) => e.line.disabled);
+  // 同一个 key 写了几行。dotenv 取第一行、别的库取最后一行,静默出错,所以要标出来
+  const keyCounts = countEnvKeys(lines);
+  /**
+   * 值照文件里的样子显示:有引号就带引号(`"hello world"`),没有就裸值。
+   * 此前用 `""` / `''` 小标签表示引号形态,看不懂;直接把引号画出来,看一眼就知道文件里怎么写的
+   */
+  const displayValueOf = (kv: Extract<EnvLine, { type: "kv" }>, masked: boolean, revealed: boolean) => {
+    const value = masked && !revealed ? maskSecret(kv.value) : kv.value;
+    return kv.quote ? `${kv.quote}${value}${kv.quote}` : value;
+  };
+  // 行内注释直接用灰字显示在右侧(项目列表没有详情面板,右边放得下文字),太长悬停看全文;此前是一个气泡图标,不知道是什么
+  const commentAccessory = (comment: string | undefined) =>
+    comment ? [{ text: { value: `# ${comment}`, color: Color.SecondaryText }, tooltip: comment }] : [];
+  // 带 export 前缀的行标一下:dotenv 认这种写法,source 进 shell 也能用,但跟普通行长得不一样
+  const exportAccessory = (exportPrefix: boolean | undefined) =>
+    exportPrefix ? [{ tag: { value: "export", color: Color.SecondaryText }, tooltip: t("pd.exportTooltip") }] : [];
+  const duplicateAccessory = (key: string) => {
+    const count = keyCounts.get(key) ?? 0;
+    return count > 1
+      ? [
+          {
+            tag: { value: t("pd.duplicateTag"), color: Color.Orange },
+            tooltip: t("pd.duplicateTooltip", { key, count }),
+          },
+        ]
+      : [];
+  };
 
   // 能借内容的候选文件:必须是磁盘上真实存在的(envFiles 里的 ".env" 可能只是探测逻辑
   // 塞进去的占位项,文件本身还不存在),且不能是当前正在看的这个空文件自己
@@ -723,6 +837,7 @@ export function ProjectDetailView({
                   onAction={() => handleUpdatePresetFromFile(driftPreset)}
                 />
                 <Action title={t("ps.driftDismiss")} icon={Icon.EyeDisabled} onAction={handleDismissDrift} />
+                {fileActions}
                 {presetActions}
               </ActionPanel>
             }
@@ -731,25 +846,26 @@ export function ProjectDetailView({
       )}
 
       <List.Section title={t("pd.sectionEnabled")} subtitle={t("pd.countItems", { count: enabledKvs.length })}>
-        {enabledKvs.map((kv) => {
+        {enabledKvs.map(({ line: kv, index }) => {
           const isSecret = isSecretKey(kv.key, currentProject.customSecrets);
           const isEncrypted = isEncryptedValue(kv.value);
           const isRevealed = revealedKeys.has(kv.key);
-          const displayValue = (isSecret || isEncrypted) && !isRevealed ? maskSecret(kv.value) : kv.value;
+          const displayValue = displayValueOf(kv, isSecret || isEncrypted, isRevealed);
 
           return (
             <List.Item
-              key={kv.key}
-              id={kv.key}
+              key={lineItemId(index)}
+              id={lineItemId(index)}
               title={kv.key}
               subtitle={displayValue}
               accessories={[
+                ...duplicateAccessory(kv.key),
+                ...exportAccessory(kv.exportPrefix),
+                ...commentAccessory(kv.comment),
                 ...(isEncrypted ? [{ tag: { value: "encrypted", color: Color.Purple } }] : []),
                 ...(isSecret
                   ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("pd.lockTooltip") }]
                   : []),
-                ...(kv.quote ? [{ tag: { value: kv.quote === '"' ? '""' : "''", color: Color.SecondaryText } }] : []),
-                ...(kv.comment ? [{ icon: Icon.SpeechBubble, tooltip: kv.comment }] : []),
               ]}
               actions={
                 <ActionPanel>
@@ -767,7 +883,12 @@ export function ProjectDetailView({
                     {/* 粘到别的 .env 或终端里最常用的其实是整行,不该逼人复制两次再自己拼 */}
                     <Action.CopyToClipboard
                       title={t("pd.actionCopyPair")}
-                      content={formatKVRaw(kv.key, kv.value, { quote: kv.quote, comment: kv.comment, end: "" })}
+                      content={formatKVRaw(kv.key, kv.value, {
+                        quote: kv.quote,
+                        comment: kv.comment,
+                        exportPrefix: kv.exportPrefix,
+                        end: "",
+                      })}
                       concealed
                     />
                   </ActionPanel.Section>
@@ -787,7 +908,7 @@ export function ProjectDetailView({
                             comment: kv.comment,
                           }}
                           customSecrets={currentProject.customSecrets}
-                          onSave={(data) => handleSaveVariable(data, kv.key)}
+                          onSave={(data) => handleSaveVariable(data, index)}
                         />
                       }
                     />
@@ -806,7 +927,7 @@ export function ProjectDetailView({
                       title={t("pd.actionToggleOff")}
                       icon={Icon.Pause}
                       shortcut={{ modifiers: ["cmd"], key: "t" }}
-                      onAction={() => handleToggleEnable(kv.key)}
+                      onAction={() => handleToggleEnable(index)}
                     />
                     <Action
                       title={isSecret ? t("pd.actionSecretOff") : t("pd.actionSecretOn")}
@@ -819,70 +940,11 @@ export function ProjectDetailView({
                       icon={Icon.Trash}
                       style={Action.Style.Destructive}
                       shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-                      onAction={() => handleDeleteVariable(kv.key)}
+                      onAction={() => handleDeleteVariable(index, kv.key)}
                     />
                   </ActionPanel.Section>
 
-                  <ActionPanel.Section title={t("pd.sectionEnvAndSnapshot")}>
-                    <Action.Push
-                      title={t("pd.actionSnapshotHistory")}
-                      icon={Icon.Clock}
-                      shortcut={Keyboard.Shortcut.Common.Duplicate}
-                      target={
-                        <SnapshotHistoryView
-                          projectName={currentProject.name}
-                          envFilename={selectedEnvFile}
-                          envFilePath={currentEnvFilePath}
-                          currentContent={serializeEnv(lines)}
-                          customSecrets={currentProject.customSecrets}
-                          onRestored={loadCurrentEnvContent}
-                        />
-                      }
-                    />
-                    <Action
-                      title={t("pd.actionGenerateExample")}
-                      icon={Icon.Document}
-                      shortcut={{ modifiers: ["cmd"], key: "g" }}
-                      onAction={handleGenerateExample}
-                    />
-                    {selectedEnvFile !== ".env" && (
-                      <Action
-                        title={t("pd.actionCopyAsMainEnv")}
-                        icon={Icon.Duplicate}
-                        shortcut={Keyboard.Shortcut.Common.Copy}
-                        onAction={handleCopyAsMainEnv}
-                      />
-                    )}
-                    <Action.Push
-                      title={t("pd.createEnvFileItem")}
-                      icon={Icon.NewDocument}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
-                      target={
-                        <CreateEnvFileForm
-                          projectPath={currentProject.path}
-                          onCreated={async (filename) => {
-                            await refreshEnvFiles();
-                            setSelectedEnvFile(filename);
-                          }}
-                        />
-                      }
-                    />
-                    <Action.Push
-                      title={t("pd.actionEditRaw")}
-                      icon={Icon.TextDocument}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                      target={
-                        <RawContentForm
-                          navTitle={t("pd.editRawNavTitle", { file: selectedEnvFile })}
-                          initialContent={currentContent}
-                          hint={t("pd.editRawHint")}
-                          onSave={(content) => saveLines(parseEnv(content)).then(() => undefined)}
-                        />
-                      }
-                    />
-                    <Action.OpenWith title={t("mv.actionOpenWith")} path={currentEnvFilePath} />
-                  </ActionPanel.Section>
-
+                  {fileActions}
                   {presetActions}
                 </ActionPanel>
               }
@@ -893,20 +955,23 @@ export function ProjectDetailView({
 
       {disabledKvs.length > 0 && (
         <List.Section title={t("pd.sectionDisabled")} subtitle={t("pd.countItems", { count: disabledKvs.length })}>
-          {disabledKvs.map((kv) => {
+          {disabledKvs.map(({ line: kv, index }) => {
             const isSecret = isSecretKey(kv.key, currentProject.customSecrets);
             const isEncrypted = isEncryptedValue(kv.value);
             const isRevealed = revealedKeys.has(kv.key);
             // 禁用不等于不敏感:被注释掉的 PASSWORD 仍然是密码,打码规则必须跟启用项一致
-            const displayValue = (isSecret || isEncrypted) && !isRevealed ? maskSecret(kv.value) : kv.value;
+            const displayValue = displayValueOf(kv, isSecret || isEncrypted, isRevealed);
 
             return (
               <List.Item
-                key={kv.key}
-                id={kv.key}
+                key={lineItemId(index)}
+                id={lineItemId(index)}
                 title={kv.key}
                 subtitle={displayValue}
                 accessories={[
+                  ...duplicateAccessory(kv.key),
+                  ...exportAccessory(kv.exportPrefix),
+                  ...commentAccessory(kv.comment),
                   ...(isSecret
                     ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("pd.lockTooltip") }]
                     : []),
@@ -918,7 +983,7 @@ export function ProjectDetailView({
                       title={t("pd.actionToggleOn")}
                       icon={Icon.Play}
                       shortcut={{ modifiers: ["cmd"], key: "t" }}
-                      onAction={() => handleToggleEnable(kv.key)}
+                      onAction={() => handleToggleEnable(index)}
                     />
                     {(isSecret || isEncrypted) && (
                       <Action
@@ -935,6 +1000,7 @@ export function ProjectDetailView({
                       content={formatKVRaw(kv.key, kv.value, {
                         quote: kv.quote,
                         comment: kv.comment,
+                        exportPrefix: kv.exportPrefix,
                         disabled: true,
                         end: "",
                       })}
@@ -954,7 +1020,7 @@ export function ProjectDetailView({
                             comment: kv.comment,
                           }}
                           customSecrets={currentProject.customSecrets}
-                          onSave={(data) => handleSaveVariable(data, kv.key)}
+                          onSave={(data) => handleSaveVariable(data, index)}
                         />
                       }
                     />
@@ -963,8 +1029,9 @@ export function ProjectDetailView({
                       icon={Icon.Trash}
                       style={Action.Style.Destructive}
                       shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-                      onAction={() => handleDeleteVariable(kv.key)}
+                      onAction={() => handleDeleteVariable(index, kv.key)}
                     />
+                    {fileActions}
                     {presetActions}
                   </ActionPanel>
                 }
@@ -974,7 +1041,7 @@ export function ProjectDetailView({
         </List.Section>
       )}
 
-      {kvLines.length === 0 && !loading && (
+      {kvEntries.length === 0 && !loading && (
         <List.EmptyView
           title={t("pd.emptyTitle")}
           description={t("pd.emptyDesc", { path: currentEnvFilePath })}
@@ -983,23 +1050,11 @@ export function ProjectDetailView({
               <Action.Push
                 title={t("pd.actionNew")}
                 icon={Icon.Plus}
+                shortcut={Keyboard.Shortcut.Common.New}
                 target={
                   <EditVariableForm
                     customSecrets={currentProject.customSecrets}
                     onSave={(data) => handleSaveVariable(data)}
-                  />
-                }
-              />
-              <Action.Push
-                title={t("pd.actionEditRaw")}
-                icon={Icon.TextDocument}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "e" }}
-                target={
-                  <RawContentForm
-                    navTitle={t("pd.editRawNavTitle", { file: selectedEnvFile })}
-                    initialContent={currentContent}
-                    hint={t("pd.editRawHint")}
-                    onSave={(content) => saveLines(parseEnv(content)).then(() => undefined)}
                   />
                 }
               />
@@ -1017,21 +1072,8 @@ export function ProjectDetailView({
                   ))}
                 </ActionPanel.Submenu>
               )}
+              {fileActions}
               {presetActions}
-              <Action.Push
-                title={t("pd.createEnvFileItem")}
-                icon={Icon.NewDocument}
-                shortcut={{ modifiers: ["cmd", "shift"], key: "n" }}
-                target={
-                  <CreateEnvFileForm
-                    projectPath={currentProject.path}
-                    onCreated={async (filename) => {
-                      await refreshEnvFiles();
-                      setSelectedEnvFile(filename);
-                    }}
-                  />
-                }
-              />
             </ActionPanel>
           }
         />
