@@ -106,14 +106,14 @@ export function PresetsView({
 
   const handleDissolveGroup = async (group: string) => {
     const confirmed = await confirmAlert({
-      title: t("ps.dissolveGroupTitle", { group }),
-      message: t("ps.dissolveGroupMessage", { count: groupSize(group) }),
-      primaryAction: { title: t("ps.dissolveGroupConfirm"), style: Alert.ActionStyle.Destructive },
+      title: t("grp.dissolveTitle", { group }),
+      message: t("grp.dissolveMessage", { count: groupSize(group) }),
+      primaryAction: { title: t("grp.dissolveConfirm"), style: Alert.ActionStyle.Destructive },
       dismissAction: { title: t("common.cancel") },
     });
     if (!confirmed) return;
     await persistGroupChange(renamePresetGroup(file, projectId, group, undefined), group);
-    await showToast({ style: Toast.Style.Success, title: t("ps.dissolvedGroupToast", { group }) });
+    await showToast({ style: Toast.Style.Success, title: t("grp.dissolvedToast", { group }) });
   };
 
   const handleDelete = async (preset: Preset) => {
@@ -140,7 +140,7 @@ export function PresetsView({
             {groups.map((g) => (
               <List.Dropdown.Item key={g} value={g} title={g} />
             ))}
-            <List.Dropdown.Item value={UNGROUPED_FILTER} title={t("ps.ungroupedSection")} />
+            <List.Dropdown.Item value={UNGROUPED_FILTER} title={t("grp.ungrouped")} />
           </List.Dropdown>
         ) : undefined
       }
@@ -158,8 +158,8 @@ export function PresetsView({
           title={
             groups.length > 0
               ? bucket.group
-                ? t("ps.groupSection", { group: bucket.group })
-                : t("ps.ungroupedSection")
+                ? t("grp.section", { group: bucket.group })
+                : t("grp.ungrouped")
               : undefined
           }
           subtitle={groups.length > 0 ? t("ps.groupSectionCount", { count: bucket.presets.length }) : undefined}
@@ -290,7 +290,7 @@ export function PresetsView({
                   {preset.group && (
                     <ActionPanel.Section>
                       <Action.Push
-                        title={t("ps.actionRenameGroup", { group: preset.group })}
+                        title={t("grp.actionRename", { group: preset.group })}
                         icon={Icon.Folder}
                         target={
                           <RenameGroupForm
@@ -302,14 +302,14 @@ export function PresetsView({
                               await persistGroupChange(renamePresetGroup(file, projectId, from, to), from);
                               await showToast({
                                 style: Toast.Style.Success,
-                                title: t("ps.renamedGroupToast", { from, to }),
+                                title: t("grp.renamedToast", { from, to }),
                               });
                             }}
                           />
                         }
                       />
                       <Action
-                        title={t("ps.actionDissolveGroup", { group: preset.group })}
+                        title={t("grp.actionDissolve", { group: preset.group })}
                         icon={Icon.Folder}
                         style={Action.Style.Destructive}
                         onAction={() => handleDissolveGroup(preset.group as string)}

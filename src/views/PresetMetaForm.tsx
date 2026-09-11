@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Preset } from "@env-butler/core";
 import { t } from "../i18n.js";
 import { formatEnvContentMasked } from "./diffFormat.js";
+import { useGroupFields } from "./GroupFields.js";
 
 export interface PresetMetaData {
   name: string;
@@ -32,11 +33,6 @@ interface PresetMetaFormProps {
   onSave: (data: PresetMetaData) => Promise<void>;
 }
 
-/**
- * 分组的填写方式(设计决议 §十一.6):Raycast 表单没有"既能选又能打字"的控件,
- * 所以拆成两个——下拉框列出已有分组,文本框用来新建;文本框填了就以它为准。
- * 这样填的时候看得到现在有哪些分组,不会瞎打字造出一堆同义的组
- */
 export function PresetMetaForm({
   initialData,
   existingGroups,
@@ -49,11 +45,7 @@ export function PresetMetaForm({
   const [name, setName] = useState(initialData?.name ?? "");
   const [note, setNote] = useState(initialData?.note ?? "");
   const [content, setContent] = useState("");
-  // 已有分组不在列表里(比如刚被别的方案改没了)时,当成"新建"填进文本框,别悄悄丢掉
-  const initialGroup = initialData?.group ?? "";
-  const initialInList = initialGroup !== "" && existingGroups.includes(initialGroup);
-  const [selectedGroup, setSelectedGroup] = useState(initialInList ? initialGroup : "");
-  const [newGroup, setNewGroup] = useState(initialInList ? "" : initialGroup);
+  const { group, fields: groupFields } = useGroupFields(initialData?.group, existingGroups);
   const [nameError, setNameError] = useState<string | undefined>();
 
   const handleSubmit = async () => {
@@ -62,7 +54,6 @@ export function PresetMetaForm({
       setNameError(t("ps.nameEmptyError"));
       return;
     }
-    const group = newGroup.trim() || selectedGroup || undefined;
     try {
       await onSave({
         name: trimmedName,
@@ -111,28 +102,7 @@ export function PresetMetaForm({
         value={note}
         onChange={setNote}
       />
-      {/* 下拉框选了就清不掉,所以必须有一项代表"不分组";一个分组都还没有时整个下拉框都不出现 */}
-      {existingGroups.length > 0 && (
-        <Form.Dropdown
-          id="existingGroup"
-          title={t("ps.groupExistingTitle")}
-          value={selectedGroup}
-          onChange={setSelectedGroup}
-          placeholder={t("common.searchPlaceholder")}
-        >
-          <Form.Dropdown.Item value="" title={t("ps.groupNone")} />
-          {existingGroups.map((g) => (
-            <Form.Dropdown.Item key={g} value={g} title={g} />
-          ))}
-        </Form.Dropdown>
-      )}
-      <Form.TextField
-        id="newGroup"
-        title={t("ps.groupNewTitle")}
-        placeholder={t("ps.groupNewPlaceholder")}
-        value={newGroup}
-        onChange={setNewGroup}
-      />
+      {groupFields}
       {editableContent && (
         <>
           <Form.Separator />

@@ -29,9 +29,9 @@ export function RenameGroupForm({ group, count, otherGroups, onRename }: RenameG
     }
     if (otherGroups.includes(to)) {
       const confirmed = await confirmAlert({
-        title: t("ps.renameGroupMergeTitle", { to }),
-        message: t("ps.renameGroupMergeMessage", { from: group, to, count }),
-        primaryAction: { title: t("ps.renameGroupMergeConfirm"), style: Alert.ActionStyle.Default },
+        title: t("grp.mergeTitle", { to }),
+        message: t("grp.mergeMessage", { from: group, to, count }),
+        primaryAction: { title: t("grp.mergeConfirm"), style: Alert.ActionStyle.Default },
         dismissAction: { title: t("common.cancel") },
       });
       if (!confirmed) return;
@@ -50,23 +50,23 @@ export function RenameGroupForm({ group, count, otherGroups, onRename }: RenameG
 
   return (
     <Form
-      navigationTitle={t("ps.renameGroupNav", { group })}
+      navigationTitle={t("grp.renameNav", { group })}
       actions={
         <ActionPanel>
-          <Action.SubmitForm title={t("ps.renameGroupSubmit")} onSubmit={handleSubmit} />
+          <Action.SubmitForm title={t("grp.renameSubmit")} onSubmit={handleSubmit} />
         </ActionPanel>
       }
     >
       <Form.TextField
         id="name"
-        title={t("ps.renameGroupNameTitle")}
+        title={t("grp.renameNameTitle")}
         value={name}
         onChange={(v) => {
           setName(v);
           setNameError(undefined);
         }}
         error={nameError}
-        info={t("ps.renameGroupHint", { group, count })}
+        info={t("grp.renameHint", { group, count })}
       />
     </Form>
   );

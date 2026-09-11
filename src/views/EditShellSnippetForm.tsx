@@ -9,11 +9,14 @@ import {
 } from "@env-butler/core";
 import { t } from "../i18n.js";
 import { validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";
+import { useGroupFields } from "./GroupFields.js";
 
 interface EditShellSnippetFormProps {
   initialData?: ShellSnippet;
   /** 探测到的用户真实登录 shell,用来决定拿 zsh -n 还是 bash -n 校验;识别不出来(如 fish)传 undefined,直接跳过语法校验 */
   shellKind: ValidatableShell | undefined;
+  /** 已经用过的分组名,列在下拉框里供选 */
+  existingGroups: string[];
   onSave: (data: Omit<ShellSnippet, "id">) => Promise<void>;
 }
 
@@ -37,7 +40,7 @@ function describeWarning(w: ShellLintWarning): string {
     : t("es.lintUnknownPrefix", { line: w.line, word: w.word });
 }
 
-export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShellSnippetFormProps) {
+export function EditShellSnippetForm({ initialData, shellKind, existingGroups, onSave }: EditShellSnippetFormProps) {
   const { pop } = useNavigation();
 
   const [name, setName] = useState(initialData?.name ?? "");
@@ -46,6 +49,7 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [enabled, setEnabled] = useState(initialData?.enabled ?? true);
   const [containsSecret, setContainsSecret] = useState(initialData?.containsSecret ?? false);
+  const { group, fields: groupFields } = useGroupFields(initialData?.group, existingGroups);
   const [nameError, setNameError] = useState<string | undefined>();
   const [contentError, setContentError] = useState<string | undefined>();
 
@@ -108,6 +112,7 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
         content: trimmedContent,
         containsSecret,
         description: description.trim() || undefined,
+        group,
         enabled,
       });
       pop();
@@ -169,6 +174,7 @@ export function EditShellSnippetForm({ initialData, shellKind, onSave }: EditShe
         value={description}
         onChange={setDescription}
       />
+      {groupFields}
       <Form.Checkbox id="enabled" label={t("es.enabledLabel")} value={enabled} onChange={setEnabled} />
       <Form.Checkbox
         id="containsSecret"

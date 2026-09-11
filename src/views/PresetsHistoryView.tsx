@@ -285,7 +285,7 @@ export function PresetsHistoryView({
       mine.length === 0
         ? t("psh.contentEmpty")
         : groupPresets(mine)
-            .flatMap((b) => b.presets.map((p) => `\`${b.group ?? t("ps.ungroupedSection")}\` · ${p.name}`))
+            .flatMap((b) => b.presets.map((p) => `\`${b.group ?? t("grp.ungrouped")}\` · ${p.name}`))
             .join("\n\n");
 
     return [

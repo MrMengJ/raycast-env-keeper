@@ -18,6 +18,10 @@ import {
   type ShellSnippet,
   addShellSnippet,
   findShellConflicts,
+  groupShellSnippets,
+  listShellGroups,
+  renameShellGroup,
+  setShellGroupEnabled,
   maskShellContent,
   moveShellSnippet,
   removeShellSnippet,
@@ -42,6 +46,7 @@ import { ConfigProblemItem } from "./ConfigProblemItem.js";
 import { ShellConfigHistoryView } from "./ShellConfigHistoryView.js";
 import { ShellRcBackupsView } from "./ShellRcBackupsView.js";
 import { EditShellSnippetForm } from "./EditShellSnippetForm.js";
+import { RenameGroupForm } from "./RenameGroupForm.js";
 
 interface ShellTrackViewProps {
   /**
@@ -195,7 +200,54 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     });
   };
 
-  // 调整片段在 shell.sh 里的先后。列表是按类型分组显示的,分组顺序跟文件里的真实顺序对不上,
+  const handleSetGroupEnabled = async (group: string, enabled: boolean) => {
+    const updated = setShellGroupEnabled(config, group, enabled);
+    const snapshot = await saveShellConfig(updated);
+    setConfig(updated);
+    // 整组打开后可能跟组外的片段撞上,挑组里第一条有冲突的提一句
+    const members = updated.snippets.filter((s) => s.group === group);
+    const hit = enabled
+      ? findShellConflicts(updated.snippets).find((c) => c.snippets.some((x) => members.some((m) => m.id === x.id)))
+      : undefined;
+    const hitId = hit?.snippets.find((x) => members.some((m) => m.id === x.id))?.id;
+    await showToast({
+      style: Toast.Style.Success,
+      title: enabled ? t("st.groupEnabledToast", { group }) : t("st.groupDisabledToast", { group }),
+      message: hitId ? saveHint(updated, hitId, snapshot) : snapshotLimitHint(snapshot),
+    });
+  };
+
+  const handleRenameGroup = async (from: string, to: string) => {
+    const updated = renameShellGroup(config, from, to);
+    const snapshot = await saveShellConfig(updated);
+    setConfig(updated);
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.groupRenamedToast", { from, to }),
+      message: snapshotLimitHint(snapshot),
+    });
+  };
+
+  const handleDissolveGroup = async (group: string) => {
+    const count = config.snippets.filter((s) => s.group === group).length;
+    const confirmed = await confirmAlert({
+      title: t("grp.dissolveTitle", { group }),
+      message: t("grp.dissolveMessage", { count }),
+      primaryAction: { title: t("grp.dissolveConfirm"), style: Alert.ActionStyle.Destructive },
+      dismissAction: { title: t("common.cancel") },
+    });
+    if (!confirmed) return;
+    const updated = renameShellGroup(config, group, undefined);
+    const snapshot = await saveShellConfig(updated);
+    setConfig(updated);
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.groupDissolvedToast", { group }),
+      message: snapshotLimitHint(snapshot),
+    });
+  };
+
+  // 调整片段在 shell.sh 里的先后。列表是按分组显示的,分组顺序跟文件里的真实顺序对不上,
   // 所以移动后用 toast 报一下新位置,再配合"查看生成的 shell.sh"让用户能核对
   const handleMove = async (id: string, direction: "up" | "down") => {
     const updated = moveShellSnippet(config, id, direction);
@@ -239,11 +291,10 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
   const shellKind: ValidatableShell | undefined =
     rcInfo && rcInfo.shellName !== "unknown" ? rcInfo.shellName : undefined;
   const conflicts = findShellConflicts(config.snippets);
-  const exports = config.snippets.filter((s) => s.type === "export");
-  const aliases = config.snippets.filter((s) => s.type === "alias");
-  const others = config.snippets.filter((s) => s.type === "snippet");
+  const groups = listShellGroups(config);
+  const buckets = groupShellSnippets(config.snippets);
 
-  // 三个分组渲染的是同一种条目,props 也完全一样,抽出来避免抄三遍
+  // 每个分区渲染的是同一种条目,props 也完全一样,抽出来避免抄几遍
   const renderSnippet = (item: ShellSnippet) => (
     <SnippetListItem
       key={item.id}
@@ -251,6 +302,11 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       orderIndex={config.snippets.findIndex((s) => s.id === item.id) + 1}
       orderTotal={config.snippets.length}
       conflicts={conflicts.filter((c) => c.snippets.some((x) => x.id === item.id))}
+      groupMates={item.group ? config.snippets.filter((s) => s.group === item.group) : []}
+      existingGroups={groups}
+      onSetGroupEnabled={handleSetGroupEnabled}
+      onRenameGroup={handleRenameGroup}
+      onDissolveGroup={handleDissolveGroup}
       shellKind={shellKind}
       onToggle={handleToggle}
       onEdit={handleEdit}
@@ -364,7 +420,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                   title={t("st.actionNewSnippet")}
                   icon={Icon.Plus}
                   shortcut={Keyboard.Shortcut.Common.New}
-                  target={<EditShellSnippetForm shellKind={shellKind} onSave={handleAdd} />}
+                  target={<EditShellSnippetForm shellKind={shellKind} existingGroups={groups} onSave={handleAdd} />}
                 />
               </ActionPanel>
             }
@@ -372,23 +428,24 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
         </List.Section>
       )}
 
-      {exports.length > 0 && (
-        <List.Section title={t("st.sectionExports")} subtitle={t("pd.countItems", { count: exports.length })}>
-          {exports.map(renderSnippet)}
+      {/* 按分组分区(组的先后 = 组内第一条的生成位置,未分组最后);一个分组都没有时平铺、不摆标题。
+          类型不再占分区——它退成每行一个小图标,搜索时也能按类型名筛 */}
+      {buckets.map((bucket) => (
+        <List.Section
+          key={bucket.group ?? "__ungrouped__"}
+          // 没分组时也要有标题:上面永远有"Shell 集成"分区,没标题的区块会被读成它的延续
+          title={
+            groups.length === 0
+              ? t("st.sectionSnippets")
+              : bucket.group
+                ? t("grp.section", { group: bucket.group })
+                : t("grp.ungrouped")
+          }
+          subtitle={t("pd.countItems", { count: bucket.snippets.length })}
+        >
+          {bucket.snippets.map(renderSnippet)}
         </List.Section>
-      )}
-
-      {aliases.length > 0 && (
-        <List.Section title={t("st.sectionAliases")} subtitle={t("pd.countItems", { count: aliases.length })}>
-          {aliases.map(renderSnippet)}
-        </List.Section>
-      )}
-
-      {others.length > 0 && (
-        <List.Section title={t("st.sectionOthers")} subtitle={t("pd.countItems", { count: others.length })}>
-          {others.map(renderSnippet)}
-        </List.Section>
-      )}
+      ))}
 
       {config.snippets.length === 0 && !loading && (
         <List.EmptyView
@@ -399,7 +456,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
               <Action.Push
                 title={t("st.actionNewSnippet")}
                 icon={Icon.Plus}
-                target={<EditShellSnippetForm shellKind={shellKind} onSave={handleAdd} />}
+                target={<EditShellSnippetForm shellKind={shellKind} existingGroups={groups} onSave={handleAdd} />}
               />
             </ActionPanel>
           }
@@ -407,6 +464,21 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       )}
     </List>
   );
+}
+
+// 搜索时按类型筛的词;要跟 st.searchPlaceholder 里写的一致
+function snippetTypeKeywords(type: ShellSnippet["type"]): string[] {
+  if (type === "export") return ["export", "变量"];
+  if (type === "alias") return ["alias", "别名"];
+  return ["snippet", "脚本"];
+}
+
+// 类型退成一个小图标:开着详情面板时列表很窄,放不下文字
+function snippetTypeIcon(type: ShellSnippet["type"]): Icon {
+  if (type === "export") return Icon.Text;
+  // alias = 别名 = 给命令贴个名字,用标签;链接图标会被读成"网址"
+  if (type === "alias") return Icon.Tag;
+  return Icon.Code;
 }
 
 // 片段类型对应的展示文案(复用编辑表单下拉框已有的翻译,避免再造一套)
@@ -505,11 +577,14 @@ function buildSnippetDetailMarkdown(
 
   // 用纯文本行而不是 markdown 列表:列表符号会被 Raycast 渲染成主题色圆点,
   // 红色在界面里通常意味着错误,而这里只是普通信息,容易误导
-  return `${t("st.detailHeading")}
+  // 标题就用片段名:左边列表窄,名字常被截断,这里是唯一能看全的地方
+  return `### ${item.name}
 
 **${t("st.detailType")}**: ${snippetTypeLabel(item.type)}
 
 **${t("st.detailStatus")}**: ${statusLabel}
+
+**${t("st.detailGroup")}**: ${item.group ?? t("grp.ungrouped")}
 
 **${t("st.detailOrder")}**: ${t("st.detailOrderValue", { index: orderIndex, total: orderTotal })}
 
@@ -527,6 +602,11 @@ function SnippetListItem({
   orderIndex,
   orderTotal,
   conflicts,
+  groupMates,
+  existingGroups,
+  onSetGroupEnabled,
+  onRenameGroup,
+  onDissolveGroup,
   shellKind,
   onToggle,
   onEdit,
@@ -544,6 +624,12 @@ function SnippetListItem({
   orderTotal: number;
   /** 这一段卷入的"重复设置"(跟别的已启用片段设了同一个变量 / alias) */
   conflicts: ShellConflict[];
+  /** 同组的全部片段(含自己);没分组时为空 */
+  groupMates: ShellSnippet[];
+  existingGroups: string[];
+  onSetGroupEnabled: (group: string, enabled: boolean) => void;
+  onRenameGroup: (from: string, to: string) => Promise<void>;
+  onDissolveGroup: (group: string) => void;
   shellKind: ValidatableShell | undefined;
   onToggle: (id: string) => void;
   onEdit: (id: string, data: Omit<ShellSnippet, "id">) => Promise<void>;
@@ -555,10 +641,17 @@ function SnippetListItem({
   currentConfig: ShellConfig;
   onRestored: () => void;
 }) {
+  const group = item.group;
+  const someEnabled = groupMates.some((s) => s.enabled);
+  const someDisabled = groupMates.some((s) => !s.enabled);
+
   return (
     <List.Item
       id={item.id}
       title={item.name}
+      // 组名和类型进搜索关键词:搜索栏的下拉位置被"项目轨 / Shell 轨"占了,筛选靠打字。
+      // 类型用固定短词(中英各一),搜索框占位文字里把这几个词写明,用户不用猜
+      keywords={[...snippetTypeKeywords(item.type), ...(group ? [group] : [])]}
       // 状态放左侧图标位:所有行的图标在同一条竖线上,一列扫下来最快;
       // 右侧只留顺序号,避免开着详情面板时把列表挤得太窄
       icon={
@@ -567,6 +660,7 @@ function SnippetListItem({
           : { source: Icon.Pause, tintColor: Color.SecondaryText }
       }
       accessories={[
+        { icon: snippetTypeIcon(item.type), tooltip: snippetTypeLabel(item.type) },
         ...(item.containsSecret
           ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("st.secretTag") }]
           : []),
@@ -600,14 +694,19 @@ function SnippetListItem({
             icon={Icon.Pencil}
             shortcut={Keyboard.Shortcut.Common.Edit}
             target={
-              <EditShellSnippetForm initialData={item} shellKind={shellKind} onSave={(data) => onEdit(item.id, data)} />
+              <EditShellSnippetForm
+                initialData={item}
+                shellKind={shellKind}
+                existingGroups={existingGroups}
+                onSave={(data) => onEdit(item.id, data)}
+              />
             }
           />
           <Action.Push
             title={t("st.actionNew")}
             icon={Icon.Plus}
             shortcut={Keyboard.Shortcut.Common.New}
-            target={<EditShellSnippetForm shellKind={shellKind} onSave={onAdd} />}
+            target={<EditShellSnippetForm shellKind={shellKind} existingGroups={existingGroups} onSave={onAdd} />}
           />
           {orderIndex > 1 && (
             <Action
@@ -624,6 +723,43 @@ function SnippetListItem({
               shortcut={Keyboard.Shortcut.Common.MoveDown}
               onAction={() => onMove(item.id, "down")}
             />
+          )}
+          {/* 分组只是散落在每条片段上的字段,区块标题挂不了动作,所以从组里任意一条进 */}
+          {group && (
+            <ActionPanel.Section title={t("grp.section", { group })}>
+              {someDisabled && (
+                <Action
+                  title={t("st.actionEnableGroup", { group })}
+                  icon={Icon.Play}
+                  onAction={() => onSetGroupEnabled(group, true)}
+                />
+              )}
+              {someEnabled && (
+                <Action
+                  title={t("st.actionDisableGroup", { group })}
+                  icon={Icon.Pause}
+                  onAction={() => onSetGroupEnabled(group, false)}
+                />
+              )}
+              <Action.Push
+                title={t("grp.actionRename", { group })}
+                icon={Icon.Folder}
+                target={
+                  <RenameGroupForm
+                    group={group}
+                    count={groupMates.length}
+                    otherGroups={existingGroups.filter((g) => g !== group)}
+                    onRename={(to) => onRenameGroup(group, to)}
+                  />
+                }
+              />
+              <Action
+                title={t("grp.actionDissolve", { group })}
+                icon={Icon.Folder}
+                style={Action.Style.Destructive}
+                onAction={() => onDissolveGroup(group)}
+              />
+            </ActionPanel.Section>
           )}
           <Action
             title={revealSecrets ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}

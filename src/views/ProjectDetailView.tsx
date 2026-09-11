@@ -537,8 +537,8 @@ export function ProjectDetailView({
               title={
                 presetGroups.length > 0
                   ? bucket.group
-                    ? t("ps.groupSection", { group: bucket.group })
-                    : t("ps.ungroupedSection")
+                    ? t("grp.section", { group: bucket.group })
+                    : t("grp.ungrouped")
                   : undefined
               }
             >
