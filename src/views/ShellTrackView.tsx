@@ -14,8 +14,10 @@ import {
 import { useEffect, useState } from "react";
 import {
   type ShellConfig,
+  type ShellConflict,
   type ShellSnippet,
   addShellSnippet,
+  findShellConflicts,
   maskShellContent,
   moveShellSnippet,
   removeShellSnippet,
@@ -147,6 +149,19 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     }
   };
 
+  /** 改完之后这一段若跟别的已启用片段设置了同一个东西,在 toast 里提一句;只提示不阻断 */
+  const saveHint = (updated: ShellConfig, id: string, snapshot: Parameters<typeof snapshotLimitHint>[0]) => {
+    const conflict = findShellConflicts(updated.snippets).find((c) => c.snippets.some((x) => x.id === id));
+    const conflictHint = conflict
+      ? t("st.conflictToast", {
+          what: conflictWhat(conflict),
+          others: conflictOthers(conflict, id),
+          effective: conflict.snippets.find((x) => x.id === conflict.effectiveId)?.name ?? "",
+        })
+      : undefined;
+    return [conflictHint, snapshotLimitHint(snapshot)].filter(Boolean).join(" · ") || undefined;
+  };
+
   const handleToggle = async (id: string) => {
     const updated = toggleShellSnippet(config, id);
     const snapshot = await saveShellConfig(updated);
@@ -154,18 +169,18 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     await showToast({
       style: Toast.Style.Success,
       title: t("st.toggledToast"),
-      message: snapshotLimitHint(snapshot),
+      message: saveHint(updated, id, snapshot),
     });
   };
 
   const handleAdd = async (data: Omit<ShellSnippet, "id">) => {
-    const { config: updated } = addShellSnippet(config, data);
+    const { config: updated, snippet } = addShellSnippet(config, data);
     const snapshot = await saveShellConfig(updated);
     setConfig(updated);
     await showToast({
       style: Toast.Style.Success,
       title: t("st.addedToast"),
-      message: snapshotLimitHint(snapshot),
+      message: saveHint(updated, snippet.id, snapshot),
     });
   };
 
@@ -176,7 +191,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     await showToast({
       style: Toast.Style.Success,
       title: t("st.updatedToast"),
-      message: snapshotLimitHint(snapshot),
+      message: saveHint(updated, id, snapshot),
     });
   };
 
@@ -223,6 +238,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
   // 只在明确探测到 zsh/bash 时才做语法校验;识别不出来(如 fish)就传 undefined,EditShellSnippetForm 会自动跳过校验
   const shellKind: ValidatableShell | undefined =
     rcInfo && rcInfo.shellName !== "unknown" ? rcInfo.shellName : undefined;
+  const conflicts = findShellConflicts(config.snippets);
   const exports = config.snippets.filter((s) => s.type === "export");
   const aliases = config.snippets.filter((s) => s.type === "alias");
   const others = config.snippets.filter((s) => s.type === "snippet");
@@ -234,6 +250,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       item={item}
       orderIndex={config.snippets.findIndex((s) => s.id === item.id) + 1}
       orderTotal={config.snippets.length}
+      conflicts={conflicts.filter((c) => c.snippets.some((x) => x.id === item.id))}
       shellKind={shellKind}
       onToggle={handleToggle}
       onEdit={handleEdit}
@@ -450,14 +467,41 @@ function ShellScriptPreview() {
 }
 
 // 详情面板内容:元信息(类型/状态/排列顺序/备注) + 完整代码,不用再进编辑表单才能看全
+function conflictWhat(conflict: ShellConflict): string {
+  return conflict.kind === "alias"
+    ? t("st.conflictAlias", { name: conflict.name })
+    : t("st.conflictVariable", { name: conflict.name });
+}
+
+function conflictOthers(conflict: ShellConflict, selfId: string): string {
+  return conflict.snippets
+    .filter((x) => x.id !== selfId)
+    .map((x) => x.name)
+    .join("」「");
+}
+
+/** 站在某一段的角度描述一条冲突:跟谁重复、最后听谁的 */
+function describeConflict(conflict: ShellConflict, selfId: string): string {
+  const what = conflictWhat(conflict);
+  const others = conflictOthers(conflict, selfId);
+  if (conflict.effectiveId === selfId) return t("st.conflictLineOnly", { what, others });
+  const effective = conflict.snippets.find((x) => x.id === conflict.effectiveId)?.name ?? "";
+  return t("st.conflictLine", { what, others, effective });
+}
+
 function buildSnippetDetailMarkdown(
   item: ShellSnippet,
   orderIndex: number,
   orderTotal: number,
   revealSecrets: boolean,
+  conflicts: ShellConflict[],
 ): string {
   const statusLabel = item.enabled ? t("st.enabledTag") : t("st.disabledTag");
   const descriptionLabel = item.description || t("st.detailNone");
+  const conflictBlock =
+    conflicts.length > 0
+      ? `\n\n**${t("st.detailConflicts")}**:\n\n${conflicts.map((c) => describeConflict(c, item.id)).join("\n\n")}`
+      : "";
 
   // 用纯文本行而不是 markdown 列表:列表符号会被 Raycast 渲染成主题色圆点,
   // 红色在界面里通常意味着错误,而这里只是普通信息,容易误导
@@ -469,7 +513,7 @@ function buildSnippetDetailMarkdown(
 
 **${t("st.detailOrder")}**: ${t("st.detailOrderValue", { index: orderIndex, total: orderTotal })}
 
-**${t("st.detailDescription")}**: ${descriptionLabel}
+**${t("st.detailDescription")}**: ${descriptionLabel}${conflictBlock}
 
 ---
 
@@ -482,6 +526,7 @@ function SnippetListItem({
   item,
   orderIndex,
   orderTotal,
+  conflicts,
   shellKind,
   onToggle,
   onEdit,
@@ -497,6 +542,8 @@ function SnippetListItem({
   /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
   orderIndex: number;
   orderTotal: number;
+  /** 这一段卷入的"重复设置"(跟别的已启用片段设了同一个变量 / alias) */
+  conflicts: ShellConflict[];
   shellKind: ValidatableShell | undefined;
   onToggle: (id: string) => void;
   onEdit: (id: string, data: Omit<ShellSnippet, "id">) => Promise<void>;
@@ -523,10 +570,24 @@ function SnippetListItem({
         ...(item.containsSecret
           ? [{ icon: { source: Icon.Lock, tintColor: Color.Orange }, tooltip: t("st.secretTag") }]
           : []),
+        // 跟"含敏感信息"同一种写法:只放橙色小图标,文字进悬停提示和详情面板。
+        // 开着详情面板时列表很窄,这一排多几个字就把顺序号挤没了
+        ...(conflicts.length > 0
+          ? [
+              {
+                icon: { source: Icon.ExclamationMark, tintColor: Color.Orange },
+                tooltip: conflicts.map((c) => describeConflict(c, item.id)).join("\n"),
+              },
+            ]
+          : []),
         // 带 # 前缀,免得裸数字被误读成"几项"(分组标题上已经在用裸数字表示数量)
         { tag: { value: `#${orderIndex}`, color: Color.SecondaryText }, tooltip: t("st.orderTooltip") },
       ]}
-      detail={<List.Item.Detail markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal, revealSecrets)} />}
+      detail={
+        <List.Item.Detail
+          markdown={buildSnippetDetailMarkdown(item, orderIndex, orderTotal, revealSecrets, conflicts)}
+        />
+      }
       actions={
         <ActionPanel>
           <Action
