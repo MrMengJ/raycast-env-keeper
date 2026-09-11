@@ -317,6 +317,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       onToggleReveal={() => setRevealSecrets((v) => !v)}
       currentConfig={config}
       onRestored={refreshConfig}
+      refreshCommand={sourceLine}
     />
   );
 
@@ -387,7 +388,12 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                     onAction={() => handleDisableIntegration(rcInfo, sourceLine)}
                   />
                 )}
-                <Action.CopyToClipboard title={t("st.copySourceCommand")} content={sourceLine} />
+                {/* 同一行命令,两种身份:没启用时是"要加进 rc 的那一行",启用后是"已开终端的刷新命令" */}
+                <Action.CopyToClipboard
+                  title={rcInfo.isSourced ? t("st.actionCopyRefresh") : t("st.copySourceCommand")}
+                  icon={Icon.Terminal}
+                  content={sourceLine}
+                />
                 <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
                 <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
                 <Action.Push
@@ -617,6 +623,7 @@ function SnippetListItem({
   onToggleReveal,
   currentConfig,
   onRestored,
+  refreshCommand,
 }: {
   item: ShellSnippet;
   /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
@@ -640,6 +647,8 @@ function SnippetListItem({
   onToggleReveal: () => void;
   currentConfig: ShellConfig;
   onRestored: () => void;
+  /** `source ~/.env-butler/shell.sh`,粘进已开的终端就能拿到新增和修改 */
+  refreshCommand: string;
 }) {
   const group = item.group;
   const someEnabled = groupMates.some((s) => s.enabled);
@@ -784,6 +793,7 @@ function SnippetListItem({
             target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
           />
           <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
+          <Action.CopyToClipboard title={t("st.actionCopyRefresh")} icon={Icon.Terminal} content={refreshCommand} />
           <Action
             title={t("st.actionDelete")}
             icon={Icon.Trash}

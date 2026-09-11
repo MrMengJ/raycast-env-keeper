@@ -324,11 +324,11 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   // ---- Shell 轨 ----
   "st.searchPlaceholder": "搜索片段名、分组；输入 export / alias / snippet 只看某一类...",
   "st.loadFailedTitle": "读取 Shell 配置失败",
-  "st.toggledToast": "已更新片段状态并重新生成 shell.sh",
-  "st.addedToast": "已添加片段并写入 shell.sh",
-  "st.updatedToast": "已更新片段并同步 shell.sh",
-  "st.deletedToast": "已删除片段",
-  "st.movedToast": "已调整顺序（第 {index} / {total} 位）",
+  "st.toggledToast": "片段状态已更新，对新开的终端生效",
+  "st.addedToast": "已添加片段，对新开的终端生效",
+  "st.updatedToast": "已更新片段，对新开的终端生效",
+  "st.deletedToast": "已删除片段，对新开的终端生效",
+  "st.movedToast": "已调整顺序（第 {index} / {total} 位），对新开的终端生效",
   "st.actionMoveUp": "上移一位（在 shell.sh 里更靠前）",
   "st.actionMoveDown": "下移一位（在 shell.sh 里更靠后）",
   "st.actionPreviewScript": "查看生成的 shell.sh",
@@ -348,8 +348,8 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.secretTag": "含敏感信息",
   "st.actionEnableGroup": "启用整组「{group}」",
   "st.actionDisableGroup": "禁用整组「{group}」",
-  "st.groupEnabledToast": "已启用「{group}」组的全部片段并重新生成 shell.sh",
-  "st.groupDisabledToast": "已禁用「{group}」组的全部片段并重新生成 shell.sh",
+  "st.groupEnabledToast": "已启用「{group}」组的全部片段，对新开的终端生效",
+  "st.groupDisabledToast": "已禁用「{group}」组的全部片段，对新开的终端生效",
   "st.groupRenamedToast": "已把分组「{from}」改为「{to}」并重新生成 shell.sh",
   "st.groupDissolvedToast": "已解散分组「{group}」并重新生成 shell.sh",
   "st.detailGroup": "分组",
@@ -404,11 +404,12 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.bootstrapSection": "Shell 集成",
   "st.sectionSnippets": "片段",
   "st.bootstrapReadyTitle": "✅ Shell 集成已启用",
-  "st.bootstrapReadySubtitle": "已在 {file} 检测到相关配置，新增/修改片段会自动同步",
+  "st.bootstrapReadySubtitle": "已在 {file} 检测到相关配置；改动对新开的终端生效",
   "st.bootstrapPendingTitle": "还差一步：启用 Shell 集成",
   "st.bootstrapUnknownTitle": "未识别到 zsh/bash，请手动把这一行添加到你的 shell 配置文件末尾：",
   "st.bootstrapLearnMore": "了解详情",
   "st.copySourceCommand": "复制这一行",
+  "st.actionCopyRefresh": "复制刷新命令（让已开的终端拿到新增和修改）",
   "st.actionEnableIntegration": "启用 Shell 集成（写入 {file}）",
   "st.enableConfirmTitle": "启用 Shell 集成？",
   "st.enableConfirmMessage":
@@ -446,7 +447,18 @@ Env Butler 把你在 Shell 轨里添加、且处于"启用"状态的全局环境
 
 ## 启用之后
 
-打开一个新的终端窗口（或执行 \`source {rcPath}\`），片段就会生效。之后你在 Shell 轨里增删改片段，Env Butler 都会自动重新生成这个文件，不需要重复启用这一步。
+打开一个新的终端窗口，片段就会生效。之后你在 Shell 轨里增删改片段，Env Butler 都会自动重新生成这个文件，不需要重复启用这一步。
+
+## 改完什么时候生效
+
+- **新开的终端**：自动生效，什么都不用做。
+- **已经开着的终端**：它在启动那一刻读过一次配置，之后不会自己更新。在里面执行下面这行，能拿到**新增和修改**的变量、alias（操作里有「复制刷新命令」）：
+
+\`\`\`
+{sourceLine}
+\`\`\`
+
+- **停用或删除的片段**，上面这行拿不掉——变量和 alias 已经在那个终端里了，重新读文件不会把它们清掉。要么开个新终端，要么自己 \`unset 变量名\` / \`unalias 别名\`。
 
 ## 怎么知道自己启用没启用
 
@@ -946,11 +958,11 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
 
   "st.searchPlaceholder": "Search by name or group; type export / alias / snippet to filter by kind...",
   "st.loadFailedTitle": "Failed to Load Shell Config",
-  "st.toggledToast": "Snippet state updated and shell.sh regenerated",
-  "st.addedToast": "Snippet added and written to shell.sh",
-  "st.updatedToast": "Snippet updated and shell.sh synced",
-  "st.deletedToast": "Snippet deleted",
-  "st.movedToast": "Order updated (now {index} of {total})",
+  "st.toggledToast": "Snippet state updated; takes effect in new terminals",
+  "st.addedToast": "Snippet added; takes effect in new terminals",
+  "st.updatedToast": "Snippet updated; takes effect in new terminals",
+  "st.deletedToast": "Snippet deleted; takes effect in new terminals",
+  "st.movedToast": "Order updated (now {index} of {total}); takes effect in new terminals",
   "st.actionMoveUp": "Move Up (earlier in shell.sh)",
   "st.actionMoveDown": "Move Down (later in shell.sh)",
   "st.actionPreviewScript": "View Generated shell.sh",
@@ -970,8 +982,8 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.secretTag": "Has Secrets",
   "st.actionEnableGroup": "Enable Group “{group}”",
   "st.actionDisableGroup": "Disable Group “{group}”",
-  "st.groupEnabledToast": "Enabled all snippets in “{group}” and regenerated shell.sh",
-  "st.groupDisabledToast": "Disabled all snippets in “{group}” and regenerated shell.sh",
+  "st.groupEnabledToast": "Enabled all snippets in “{group}”; takes effect in new terminals",
+  "st.groupDisabledToast": "Disabled all snippets in “{group}”; takes effect in new terminals",
   "st.groupRenamedToast": "Renamed group “{from}” to “{to}” and regenerated shell.sh",
   "st.groupDissolvedToast": "Dissolved group “{group}” and regenerated shell.sh",
   "st.detailGroup": "Group",
@@ -1027,12 +1039,13 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.bootstrapSection": "Shell Integration",
   "st.sectionSnippets": "Snippets",
   "st.bootstrapReadyTitle": "✅ Shell Integration Enabled",
-  "st.bootstrapReadySubtitle": "Found the matching config in {file} — new/edited snippets sync automatically",
+  "st.bootstrapReadySubtitle": "Found the matching config in {file}; changes take effect in new terminals",
   "st.bootstrapPendingTitle": "One step left: enable Shell integration",
   "st.bootstrapUnknownTitle":
     "Couldn't detect zsh/bash — please manually add this line to the end of your shell config file:",
   "st.bootstrapLearnMore": "Learn More",
   "st.copySourceCommand": "Copy This Line",
+  "st.actionCopyRefresh": "Copy Refresh Command (for terminals already open)",
   "st.actionEnableIntegration": "Enable Shell Integration (Write to {file})",
   "st.enableConfirmTitle": "Enable Shell integration?",
   "st.enableConfirmMessage":
@@ -1070,7 +1083,18 @@ Once enabled, this notice switches to "✅ Shell Integration Enabled" and a **Di
 
 ## After enabling it
 
-Open a new terminal window (or run \`source {rcPath}\`) and your snippets will take effect. From then on, whenever you add/edit/remove snippets in the Shell track, Env Butler regenerates this file automatically — no need to repeat this step.
+Open a new terminal window and your snippets will take effect. From then on, whenever you add/edit/remove snippets in the Shell track, Env Butler regenerates this file automatically — no need to repeat this step.
+
+## When do changes take effect?
+
+- **New terminals**: automatically, nothing to do.
+- **Terminals already open**: they read the config once at startup and never re-read it. Run this line inside them to pick up **added and edited** variables and aliases (there is a "Copy Refresh Command" action):
+
+\`\`\`
+{sourceLine}
+\`\`\`
+
+- **Disabled or deleted snippets** cannot be undone this way — the variables and aliases are already in that shell, and re-reading the file will not remove them. Open a new terminal, or \`unset NAME\` / \`unalias NAME\` by hand.
 
 ## How do I know if it's enabled?
 
