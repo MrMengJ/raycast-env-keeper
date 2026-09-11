@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Detail, Icon, Keyboard, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Detail, Icon, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import { diffEnvVariables, parseEnv, type Preset } from "@env-butler/core";
 import { t } from "../i18n.js";
@@ -82,7 +82,7 @@ export function PresetDiffView({
           <Action
             title={reveal ? t("ps.actionHide") : t("ps.actionReveal")}
             icon={reveal ? Icon.EyeDisabled : Icon.Eye}
-            shortcut={Keyboard.Shortcut.Common.Refresh}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
             onAction={() => setReveal((v) => !v)}
           />
           {/* 方案内容可能带明文密钥,不进 Raycast 的剪贴板历史 */}

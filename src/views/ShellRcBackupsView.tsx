@@ -182,8 +182,9 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
         : `\`\`\`bash\n${reveal ? preview : maskShellContent(preview)}\n\`\`\``,
     ].join("\n");
 
+  // "再备份一份"放到单独一组:选中某份备份按回车,要的是"恢复它",不是又存一份
   const sharedActions = (
-    <>
+    <ActionPanel.Section title={t("rcb.sectionBackup")}>
       <Action
         title={t("rcb.actionBackupNow", { file: rcInfo.rcLabel })}
         icon={Icon.Download}
@@ -194,7 +195,7 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
         icon={Icon.Folder}
         target={<BackupToForm rcInfo={rcInfo} onDone={refresh} />}
       />
-    </>
+    </ActionPanel.Section>
   );
 
   return (
@@ -216,26 +217,32 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
             detail={<List.Item.Detail markdown={selectedId === item.filename ? buildMarkdown(item) : ""} />}
             actions={
               <ActionPanel>
+                <ActionPanel.Section>
+                  {/* 回车 = 恢复这份备份(有确认框):这一页就是为了它存在的 */}
+                  <Action
+                    title={t("rcb.actionRestore", { file: rcInfo.rcLabel })}
+                    icon={Icon.Undo}
+                    style={Action.Style.Destructive}
+                    onAction={() => handleRestore(item)}
+                  />
+                  <Action
+                    title={reveal ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
+                    icon={reveal ? Icon.EyeDisabled : Icon.Eye}
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
+                    onAction={() => setReveal((v) => !v)}
+                  />
+                  <Action.ShowInFinder title={t("rcb.actionShowInFinder")} path={item.filePath} />
+                </ActionPanel.Section>
                 {sharedActions}
-                <Action
-                  title={t("rcb.actionRestore", { file: rcInfo.rcLabel })}
-                  icon={Icon.Undo}
-                  style={Action.Style.Destructive}
-                  onAction={() => handleRestore(item)}
-                />
-                <Action
-                  title={reveal ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
-                  icon={reveal ? Icon.EyeDisabled : Icon.Eye}
-                  onAction={() => setReveal((v) => !v)}
-                />
-                <Action.ShowInFinder title={t("rcb.actionShowInFinder")} path={item.filePath} />
-                <Action
-                  title={t("rcb.actionDelete")}
-                  icon={Icon.Trash}
-                  style={Action.Style.Destructive}
-                  shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-                  onAction={() => handleDelete(item)}
-                />
+                <ActionPanel.Section>
+                  <Action
+                    title={t("rcb.actionDelete")}
+                    icon={Icon.Trash}
+                    style={Action.Style.Destructive}
+                    shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+                    onAction={() => handleDelete(item)}
+                  />
+                </ActionPanel.Section>
               </ActionPanel>
             }
           />

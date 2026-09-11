@@ -55,3 +55,18 @@ export async function validateShellSyntax(
     return { valid: true };
   }
 }
+
+/**
+ * 这个词是不是一条真实存在的命令。给拼写提醒兜底:`make PREFIX=/usr install` 这种"命令 变量=值 参数"
+ * 是合法且常见的写法,以前会被说成"不像是一条命令"。
+ * 用登录 shell 的 `-l` 模式查:Raycast 进程的 PATH 很短,brew 装的命令直接查会查不到。
+ * 词只允许安全字符,拼进命令行没有注入风险;查不出来(超时、shell 不在)按"不认识"处理,照常提醒
+ */
+export async function isKnownCommand(word: string, shellKind: ValidatableShell | undefined): Promise<boolean> {
+  if (!/^[A-Za-z0-9_.+-]+$/.test(word)) return false;
+  const shell = shellKind ?? "zsh";
+  return new Promise((resolve) => {
+    const child = exec(`${shell} -lc 'command -v -- ${word}'`, { timeout: 3000 }, (error) => resolve(!error));
+    child.on("error", () => resolve(false));
+  });
+}

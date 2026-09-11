@@ -1,4 +1,4 @@
-import { Action, ActionPanel, confirmAlert, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Alert, confirmAlert, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import {
   lintShellSnippet,
@@ -8,7 +8,7 @@ import {
   type ShellSnippetType,
 } from "@env-butler/core";
 import { t } from "../i18n.js";
-import { validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";
+import { isKnownCommand, validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";
 import { useGroupFields } from "./GroupFields.js";
 
 interface EditShellSnippetFormProps {
@@ -81,16 +81,24 @@ export function EditShellSnippetForm({ initialData, shellKind, existingGroups, o
 
     // 拼写检查:`exprot PASSWORD=xxx` 语法完全合法,shell 自己永远报不出来,
     // 但这一行绝不会生效。只能靠猜,所以是"提醒 + 让用户拍板",不是硬拦
-    const warnings = lintShellSnippet(trimmedContent);
+    // "不像命令"的那一类先查一下是不是真命令(make、ssh、docker……),是就不提醒;拼错关键字的那一类照常提醒
+    const rawWarnings = lintShellSnippet(trimmedContent);
+    const checks = await Promise.all(
+      rawWarnings.map(async (w) =>
+        w.code === "unknownAssignmentPrefix" ? !(await isKnownCommand(w.word, shellKind)) : true,
+      ),
+    );
+    const warnings = rawWarnings.filter((_, i) => checks[i]);
     if (warnings.length > 0) {
+      // Esc 必须等于"不保存、回去改":之前把"回去改"放在主按钮上,Esc 反而触发了另一个按钮把可疑内容存了进去。
+      // 代价是回车变成"仍然保存",靠文案和按钮的红色提醒
       const proceed = await confirmAlert({
         title: t("es.lintConfirmTitle"),
         message: warnings.map(describeWarning).join("\n"),
-        primaryAction: { title: t("es.lintFixAction") },
-        dismissAction: { title: t("es.lintIgnoreAction") },
+        primaryAction: { title: t("es.lintIgnoreAction"), style: Alert.ActionStyle.Destructive },
+        dismissAction: { title: t("es.lintFixAction") },
       });
-      // 主按钮是"回去改":真写错的概率远高于"故意这么写",默认动作该指向修正
-      if (proceed) return;
+      if (!proceed) return;
     }
 
     // 用探测到的真实 shell 类型做语法校验(zsh -n / bash -n);识别不出来则跳过,不阻断保存
@@ -127,6 +135,7 @@ export function EditShellSnippetForm({ initialData, shellKind, existingGroups, o
 
   return (
     <Form
+      navigationTitle={initialData ? t("es.navEdit", { name: initialData.name }) : t("es.navCreate")}
       actions={
         <ActionPanel>
           <Action.SubmitForm title={t("es.submitTitle")} onSubmit={handleSubmit} />

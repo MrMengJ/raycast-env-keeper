@@ -43,7 +43,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
   const [disabled, setDisabled] = useState(initialData?.disabled ?? false);
   const [comment, setComment] = useState(initialData?.comment ?? "");
 
-  const isDefaultSecret = isSecretKey(key, customSecrets);
+  const isDefaultSecret = isSecretKey(key, customSecrets, value);
   const [customSecretChecked, setCustomSecretChecked] = useState(isDefaultSecret);
 
   const [keyError, setKeyError] = useState<string | undefined>();
@@ -110,7 +110,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
         onChange={(val) => {
           setKey(val);
           setKeyError(undefined);
-          setCustomSecretChecked(isSecretKey(val, customSecrets));
+          setCustomSecretChecked(isSecretKey(val, customSecrets, value));
         }}
         error={keyError}
       />

@@ -161,7 +161,7 @@ export function PresetsHistoryView({
       // 以现在的文件为底,只换回该换的部分。savePresets 会先把"现在"存成一份新记录,恢复本身也可撤销
       const next =
         focusPreset && snapshotPreset
-          ? restorePreset(currentFile, snapshotPreset)
+          ? restorePreset(currentFile, snapshotPreset, new Date(), file)
           : restoreProjectPresets(currentFile, file, projectId);
       const snapshot = await savePresets(next);
       await showToast({

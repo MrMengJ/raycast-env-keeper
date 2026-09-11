@@ -164,7 +164,7 @@ export default function Command() {
       v.key.toLowerCase().includes(q) ||
       v.sourceLabel.toLowerCase().includes(q) ||
       // 敏感值不参与按值搜索:否则在搜索框里逐字试探就能反推出密钥
-      (!isSecretKey(v.key, v.project?.customSecrets) && v.value.toLowerCase().includes(q))
+      (!isSecretKey(v.key, v.project?.customSecrets, v.value) && v.value.toLowerCase().includes(q))
     );
   });
   const projectVars = filtered.filter((v) => v.project && !v.presetName);
@@ -177,7 +177,7 @@ export default function Command() {
       <List.Section title={title} subtitle={t("search.sectionSubtitle", { count: items.length })}>
         {items.map((item, idx) => {
           const uniqueId = `${item.project?.id ?? "shell"}_${item.sourceLabel}_${item.key}_${idx}`;
-          const isSecret = isSecretKey(item.key, item.project?.customSecrets);
+          const isSecret = isSecretKey(item.key, item.project?.customSecrets, item.value);
           const isEncrypted = isEncryptedValue(item.value);
           const isRevealed = revealedSet.has(uniqueId);
           const bare = (isSecret || isEncrypted) && !isRevealed ? maskSecret(item.value) : item.value;
@@ -235,6 +235,7 @@ export default function Command() {
                     <Action
                       title={isRevealed ? t("search.actionHide") : t("search.actionReveal")}
                       icon={isRevealed ? Icon.EyeDisabled : Icon.Eye}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
                       onAction={() => toggleReveal(uniqueId)}
                     />
                   )}

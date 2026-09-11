@@ -1,7 +1,14 @@
 import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { readFile } from "node:fs/promises";
 import { useEffect, useState } from "react";
-import { diffEnvVariables, isSecretKey, maskSecret, parseEnv, type ProjectMeta } from "@env-butler/core";
+import {
+  diffEnvVariables,
+  isEncryptedValue,
+  isSecretKey,
+  maskSecret,
+  parseEnv,
+  type ProjectMeta,
+} from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
@@ -150,7 +157,8 @@ export function SnapshotHistoryView({
 
   const displayVal = (key: string, value: string | undefined) => {
     if (value === undefined) return "";
-    return isSecretKey(key, customSecrets) ? maskSecret(value) : value;
+    // 跟共用的 envValueDisplayer 一致:名字、值、加密前缀三种都判
+    return isSecretKey(key, customSecrets, value) || isEncryptedValue(value) ? maskSecret(value) : value;
   };
 
   // 快照内容:注释行、空行原样保留(比结构化展示更贴近原文),只把敏感值打码——

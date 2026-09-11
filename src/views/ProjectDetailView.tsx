@@ -33,6 +33,7 @@ import {
   isEncryptedValue,
   maskSecret,
   type ProjectMeta,
+  renameProjectSecret,
   setEnvrcNoticeDismissed,
   toggleProjectSecret,
   type Preset,
@@ -247,6 +248,32 @@ export function ProjectDetailView({
   // 保存变量表单编辑。编辑按"第几行"定位、原位重建(改名也不会跑到文件末尾);
   // 新建按名字:已有同名就更新那一行(优先启用的),没有就追加
   const handleSaveVariable = async (data: VariableFormData, at?: number) => {
+    // 新建撞上已有名字:此前静默覆盖旧值,只提示"已保存"
+    if (at === undefined && findEnvLineIndex(lines, data.key) >= 0) {
+      const confirmed = await confirmAlert({
+        title: t("pd.overwriteConfirmTitle", { key: data.key }),
+        message: t("pd.overwriteConfirmMessage", { file: selectedEnvFile }),
+        primaryAction: { title: t("pd.overwriteConfirmAction"), style: Alert.ActionStyle.Destructive },
+        dismissAction: { title: t("common.cancel") },
+      });
+      if (!confirmed) throw new Error(t("pd.overwriteCancelled"));
+    }
+    // 改了名字:名单里关于旧名字的敏感判断跟着改到新名字上,不留死条目
+    let secretsNow = currentProject.customSecrets;
+    const oldLine = at !== undefined ? lines[at] : undefined;
+    if (oldLine?.type === "kv" && oldLine.key !== data.key) {
+      const { data: registry, problem } = await loadRegistry();
+      if (!problem) {
+        const updated = renameProjectSecret(registry, currentProject.id, oldLine.key, data.key);
+        await saveRegistry(updated);
+        const p = updated.projects.find((item) => item.id === currentProject.id);
+        if (p) {
+          secretsNow = p.customSecrets;
+          setCurrentProject(p);
+          onProjectUpdated?.(p);
+        }
+      }
+    }
     const updatedLines =
       at === undefined
         ? addEnvVariable(lines, data.key, data.value, {
@@ -262,8 +289,8 @@ export function ProjectDetailView({
             comment: data.comment,
           });
 
-    // 如果用户在表单里勾选了自定义敏感
-    const isCurrentlySecret = isSecretKey(data.key, currentProject.customSecrets);
+    // 如果用户在表单里勾选了自定义敏感(改过名的话要用改名后的名单判断,闭包里的还是旧的)
+    const isCurrentlySecret = isSecretKey(data.key, secretsNow);
     if (data.isSecret !== isCurrentlySecret) {
       await handleToggleSecret(data.key);
     }
@@ -544,7 +571,7 @@ export function ProjectDetailView({
       <Action.Push
         title={t("pd.actionSnapshotHistory")}
         icon={Icon.Clock}
-        shortcut={Keyboard.Shortcut.Common.Duplicate}
+        shortcut={{ modifiers: ["cmd", "shift"], key: "h" }}
         target={
           <SnapshotHistoryView
             project={currentProject}
@@ -562,13 +589,9 @@ export function ProjectDetailView({
         shortcut={{ modifiers: ["cmd"], key: "g" }}
         onAction={handleGenerateExample}
       />
+      {/* 不给快捷键:⌘⇧C 在 Raycast 里是"复制到剪贴板"的惯例,这个动作是写文件,低频、走面板 */}
       {selectedEnvFile !== ".env" && (
-        <Action
-          title={t("pd.actionCopyAsMainEnv")}
-          icon={Icon.Duplicate}
-          shortcut={Keyboard.Shortcut.Common.Copy}
-          onAction={handleCopyAsMainEnv}
-        />
+        <Action title={t("pd.actionCopyAsMainEnv")} icon={Icon.Duplicate} onAction={handleCopyAsMainEnv} />
       )}
       <Action.Push
         title={t("pd.createEnvFileItem")}
@@ -637,6 +660,7 @@ export function ProjectDetailView({
         target={
           <PresetMetaForm
             existingGroups={presetGroups}
+            existingNames={projectPresets.map((p) => p.name)}
             contentPreview={{
               content: currentContent,
               sourceFile: selectedEnvFile,
@@ -653,6 +677,7 @@ export function ProjectDetailView({
           <PresetMetaForm
             navTitle={t("ps.createBlank")}
             existingGroups={presetGroups}
+            existingNames={projectPresets.map((p) => p.name)}
             editableContent
             onSave={handleCreateBlankPreset}
           />
@@ -847,7 +872,7 @@ export function ProjectDetailView({
 
       <List.Section title={t("pd.sectionEnabled")} subtitle={t("pd.countItems", { count: enabledKvs.length })}>
         {enabledKvs.map(({ line: kv, index }) => {
-          const isSecret = isSecretKey(kv.key, currentProject.customSecrets);
+          const isSecret = isSecretKey(kv.key, currentProject.customSecrets, kv.value);
           const isEncrypted = isEncryptedValue(kv.value);
           const isRevealed = revealedKeys.has(kv.key);
           const displayValue = displayValueOf(kv, isSecret || isEncrypted, isRevealed);
@@ -870,15 +895,17 @@ export function ProjectDetailView({
               actions={
                 <ActionPanel>
                   <ActionPanel.Section>
+                    {/* 回车永远是「复制值」,不管敏感与否(复制本来就不进剪贴板历史);显示明文统一 ⌘⇧M。
+                        concealed:变量值可能是密钥,不该留在 Raycast 的剪贴板历史里被搜到 */}
+                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     {(isSecret || isEncrypted) && (
                       <Action
                         title={isRevealed ? t("pd.actionHide") : t("pd.actionReveal")}
                         icon={isRevealed ? Icon.EyeDisabled : Icon.Eye}
+                        shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
                         onAction={() => toggleRevealKey(kv.key)}
                       />
                     )}
-                    {/* concealed:变量值可能是密钥,不该留在 Raycast 的剪贴板历史里被搜到 */}
-                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
                     {/* 粘到别的 .env 或终端里最常用的其实是整行,不该逼人复制两次再自己拼 */}
                     <Action.CopyToClipboard
@@ -956,7 +983,7 @@ export function ProjectDetailView({
       {disabledKvs.length > 0 && (
         <List.Section title={t("pd.sectionDisabled")} subtitle={t("pd.countItems", { count: disabledKvs.length })}>
           {disabledKvs.map(({ line: kv, index }) => {
-            const isSecret = isSecretKey(kv.key, currentProject.customSecrets);
+            const isSecret = isSecretKey(kv.key, currentProject.customSecrets, kv.value);
             const isEncrypted = isEncryptedValue(kv.value);
             const isRevealed = revealedKeys.has(kv.key);
             // 禁用不等于不敏感:被注释掉的 PASSWORD 仍然是密码,打码规则必须跟启用项一致
@@ -979,20 +1006,16 @@ export function ProjectDetailView({
                 ]}
                 actions={
                   <ActionPanel>
-                    <Action
-                      title={t("pd.actionToggleOn")}
-                      icon={Icon.Play}
-                      shortcut={{ modifiers: ["cmd"], key: "t" }}
-                      onAction={() => handleToggleEnable(index)}
-                    />
+                    {/* 跟启用行一样:回车 = 复制值;启用是写文件的动作,用 ⌘T */}
+                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     {(isSecret || isEncrypted) && (
                       <Action
                         title={isRevealed ? t("pd.actionHide") : t("pd.actionReveal")}
                         icon={isRevealed ? Icon.EyeDisabled : Icon.Eye}
+                        shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
                         onAction={() => toggleRevealKey(kv.key)}
                       />
                     )}
-                    <Action.CopyToClipboard title={t("pd.actionCopyValue")} content={kv.value} concealed />
                     <Action.CopyToClipboard title={t("pd.actionCopyKey")} content={kv.key} />
                     {/* 照着文件里的样子复制:这一行本来就是注释掉的,带着 # 才是"整行" */}
                     <Action.CopyToClipboard
@@ -1005,6 +1028,12 @@ export function ProjectDetailView({
                         end: "",
                       })}
                       concealed
+                    />
+                    <Action
+                      title={t("pd.actionToggleOn")}
+                      icon={Icon.Play}
+                      shortcut={{ modifiers: ["cmd"], key: "t" }}
+                      onAction={() => handleToggleEnable(index)}
                     />
                     <Action.Push
                       title={t("pd.actionEdit")}

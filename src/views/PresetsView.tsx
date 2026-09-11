@@ -21,10 +21,12 @@ import {
   parseEnv,
   type Preset,
   type PresetsFile,
+  recordPresetApplied,
   removePreset,
   renamePresetGroup,
   updatePreset,
 } from "@env-butler/core";
+import type { PresetMetaData } from "./PresetMetaForm.js";
 import { t } from "../i18n.js";
 import { type ConfigLoadProblem, loadPresets, savePresets } from "../services/storage.js";
 import { ConfigProblemItem } from "./ConfigProblemItem.js";
@@ -120,6 +122,65 @@ export function PresetsView({
     await persistGroupChange(renamePresetGroup(file, projectId, group, undefined), group);
     await showToast({ style: Toast.Style.Success, title: t("grp.dissolvedToast", { group }) });
   };
+
+  // 新建的两条路在这一页也要有:一个叫"管理 X"的页面不能新建 X 说不过去,空状态还把人推回上一页
+  const handleSaveAs = async (data: PresetMetaData) => {
+    const { file: next, preset } = addPreset(file, {
+      projectId,
+      name: data.name,
+      note: data.note,
+      group: data.group,
+      content: currentContent,
+    });
+    // 刚存的那份跟文件当然一致;顺手记成"已套用",之后一改就能提示漂移
+    await persist(recordPresetApplied(next, projectId, envFilename, preset.id));
+    await showToast({ style: Toast.Style.Success, title: t("ps.savedToast", { name: preset.name }) });
+  };
+
+  const handleCreateBlank = async (data: PresetMetaData) => {
+    const { file: next, preset } = addPreset(file, {
+      projectId,
+      name: data.name,
+      note: data.note,
+      group: data.group,
+      content: data.content ?? "",
+    });
+    await persist(next);
+    await showToast({ style: Toast.Style.Success, title: t("ps.savedToast", { name: preset.name }) });
+  };
+
+  const existingNames = presets.map((p) => p.name);
+  const createActions = (
+    <ActionPanel.Section title={t("ps.sectionCreate")}>
+      <Action.Push
+        title={t("ps.saveAsNew")}
+        icon={Icon.SaveDocument}
+        shortcut={Keyboard.Shortcut.Common.Save}
+        target={
+          <PresetMetaForm
+            existingGroups={groups}
+            existingNames={existingNames}
+            contentPreview={{ content: currentContent, sourceFile: envFilename, customSecrets }}
+            onSave={handleSaveAs}
+          />
+        }
+      />
+      <Action.Push
+        title={t("ps.createBlank")}
+        icon={Icon.NewDocument}
+        shortcut={Keyboard.Shortcut.Common.New}
+        target={
+          <PresetMetaForm
+            navTitle={t("ps.createBlank")}
+            existingGroups={groups}
+            existingNames={existingNames}
+            editableContent
+            onSave={handleCreateBlank}
+          />
+        }
+      />
+    </ActionPanel.Section>
+  );
 
   const handleDelete = async (preset: Preset) => {
     const confirmed = await confirmAlert({
@@ -241,6 +302,7 @@ export function PresetsView({
                         <PresetMetaForm
                           initialData={preset}
                           existingGroups={groups}
+                          existingNames={existingNames.filter((n) => n !== preset.name)}
                           onSave={async (data) => {
                             await persist(updatePreset(file, preset.id, data));
                             await showToast({
@@ -265,6 +327,7 @@ export function PresetsView({
                             group: preset.group,
                           }}
                           existingGroups={groups}
+                          existingNames={existingNames}
                           contentPreview={{ content: preset.content, sourceFile: preset.name, customSecrets }}
                           onSave={async (data) => {
                             const { file: next, preset: copy } = addPreset(file, {
@@ -325,6 +388,8 @@ export function PresetsView({
                     </ActionPanel.Section>
                   )}
 
+                  {createActions}
+
                   <ActionPanel.Section>
                     <Action.Push
                       title={t("ps.actionFocusHistory")}
@@ -371,6 +436,7 @@ export function PresetsView({
           description={t("ps.emptyDesc")}
           actions={
             <ActionPanel>
+              {createActions}
               <Action.Push
                 title={t("ps.actionHistory")}
                 icon={Icon.Clock}

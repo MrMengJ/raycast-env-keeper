@@ -17,6 +17,7 @@ import {
   type ShellConflict,
   type ShellSnippet,
   addShellSnippet,
+  adjacentInGroupIndex,
   findShellConflicts,
   groupShellSnippets,
   listShellGroups,
@@ -33,7 +34,9 @@ import type { ValidatableShell } from "../services/shellValidator.js";
 import {
   appendShellSourceLine,
   detectShellRc,
+  getShellRefreshCommand,
   getShellScriptPath,
+  getShellSourceLine,
   type ConfigLoadProblem,
   getBaseDir,
   loadShellConfig,
@@ -47,6 +50,8 @@ import { ShellConfigHistoryView } from "./ShellConfigHistoryView.js";
 import { ShellRcBackupsView } from "./ShellRcBackupsView.js";
 import { EditShellSnippetForm } from "./EditShellSnippetForm.js";
 import { RenameGroupForm } from "./RenameGroupForm.js";
+import { conflictOthers, conflictWhat, describeConflict } from "./shellConflictText.js";
+import { copyRefreshCommand } from "./refreshCommand.js";
 
 interface ShellTrackViewProps {
   /**
@@ -138,13 +143,15 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     if (!confirmed) return;
 
     try {
-      const { removed, backupPath } = await removeShellSourceLine(rc.rcPath);
-      // 那一行本来就不在(用户手动删过、rc 文件不存在):如实说,别报"已移除"
+      const { removed, backupPath, customLineFound } = await removeShellSourceLine(rc.rcPath);
+      // 那一行本来就不在(用户手动删过、rc 文件不存在),或者是用户自己改过的写法:如实说,别报"已移除"
       if (!removed) {
         await showToast({
           style: Toast.Style.Failure,
-          title: t("st.disableNotFoundTitle", { file: rc.rcLabel }),
-          message: t("st.disableNotFoundMessage"),
+          title: customLineFound
+            ? t("st.disableCustomLineTitle", { file: rc.rcLabel })
+            : t("st.disableNotFoundTitle", { file: rc.rcLabel }),
+          message: customLineFound ? t("st.disableCustomLineMessage") : t("st.disableNotFoundMessage"),
         });
         await refreshConfig();
         return;
@@ -330,8 +337,9 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     );
   };
 
-  const shellPath = getShellScriptPath();
-  const sourceLine = `source ${shellPath}`;
+  // 写进 rc 的那一行带存在性保护、用 $HOME;刷新命令只是 source
+  const sourceLine = getShellSourceLine();
+  const refreshCommand = getShellRefreshCommand();
   // 只在明确探测到 zsh/bash 时才做语法校验;识别不出来(如 fish)就传 undefined,EditShellSnippetForm 会自动跳过校验
   const shellKind: ValidatableShell | undefined =
     rcInfo && rcInfo.shellName !== "unknown" ? rcInfo.shellName : undefined;
@@ -348,6 +356,8 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       item={item}
       orderIndex={config.snippets.findIndex((s) => s.id === item.id) + 1}
       orderTotal={config.snippets.length}
+      canMoveUp={adjacentInGroupIndex(config.snippets, item.id, "up") >= 0}
+      canMoveDown={adjacentInGroupIndex(config.snippets, item.id, "down") >= 0}
       conflicts={conflicts.filter((c) => c.snippets.some((x) => x.id === item.id))}
       groupMates={item.group ? config.snippets.filter((s) => s.group === item.group) : []}
       existingGroups={groups}
@@ -364,7 +374,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       onToggleReveal={() => setRevealSecrets((v) => !v)}
       currentConfig={config}
       onRestored={refreshConfig}
-      refreshCommand={sourceLine}
+      refreshCommand={refreshCommand}
       integrationActive={integrationActive}
     />
   );
@@ -377,7 +387,21 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       : rcInfo.shellName === "unknown"
         ? t("st.bootstrapUnknownTitle")
         : t("st.bootstrapPendingTitle", { file: rcInfo.rcLabel });
-  const bootstrapSubtitle = rcInfo?.isSourced ? t("st.bootstrapReadySubtitle", { file: rcInfo.rcLabel }) : sourceLine;
+  // 登录 shell 不是 zsh / bash(如 fish):生成的脚本是 bash 语法,在里面用不了;rc 路径的兜底值也跟他无关。
+  // 说实话、把指着 rc 文件的动作都藏起来,别让人对着一个错误的文件折腾
+  const unsupportedShell = rcInfo?.shellName === "unknown";
+  const bootstrapSubtitle = !rcInfo
+    ? ""
+    : unsupportedShell
+      ? t("st.unsupportedShellSubtitle", { shell: rcInfo.loginShell || "?" })
+      : rcInfo.isSourced
+        ? t("st.bootstrapReadySubtitle", { file: rcInfo.rcLabel })
+        : sourceLine;
+  const bootstrapMarkdown = !rcInfo
+    ? ""
+    : unsupportedShell
+      ? t("st.unsupportedShellDetail", { shell: rcInfo.loginShell || "?" })
+      : t("st.bootstrapDetailMarkdown", { sourceLine, refreshCommand, file: rcInfo.rcLabel, rcPath: rcInfo.rcLabel });
 
   // 有片段时才开详情预览面板(没有片段就没什么可预览的,保持紧凑列表更合适)
   const isShowingDetail = config.snippets.length > 0;
@@ -406,26 +430,23 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
             icon={{
               source: rcInfo.isSourced
                 ? Icon.CheckCircle
-                : config.snippets.length > 0
+                : config.snippets.length > 0 || unsupportedShell
                   ? Icon.ExclamationMark
                   : Icon.Terminal,
-              tintColor: rcInfo.isSourced ? Color.Green : config.snippets.length > 0 ? Color.Orange : Color.Blue,
+              tintColor: rcInfo.isSourced
+                ? Color.Green
+                : config.snippets.length > 0 || unsupportedShell
+                  ? Color.Orange
+                  : Color.Blue,
             }}
             title={bootstrapTitle}
             subtitle={isShowingDetail ? undefined : bootstrapSubtitle}
-            detail={
-              isShowingDetail ? (
-                <List.Item.Detail
-                  markdown={t("st.bootstrapDetailMarkdown", {
-                    sourceLine,
-                    file: rcInfo.rcLabel,
-                    rcPath: rcInfo.rcLabel,
-                  })}
-                />
-              ) : undefined
-            }
+            // 没有片段时的引导放在这一行右侧:空状态页面在这里永远显示不出来(这一行始终在),之前那段引导是死的
+            accessories={config.snippets.length === 0 && !loading ? [{ text: t("st.noSnippetsHint") }] : undefined}
+            detail={isShowingDetail ? <List.Item.Detail markdown={bootstrapMarkdown} /> : undefined}
             actions={
               <ActionPanel>
+                {/* 回车永远是无害动作:没接入时是"启用",接入后是"复制刷新命令";"禁用"是破坏性的,沉到最底 */}
                 {!rcInfo.isSourced && rcInfo.shellName !== "unknown" && (
                   <Action
                     title={t("st.actionEnableIntegration", { file: rcInfo.rcLabel })}
@@ -433,47 +454,15 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                     onAction={() => handleEnableIntegration(rcInfo, sourceLine)}
                   />
                 )}
-                {rcInfo.isSourced && (
-                  <Action
-                    title={t("st.actionDisableIntegration", { file: rcInfo.rcLabel })}
-                    icon={Icon.XMarkCircle}
-                    style={Action.Style.Destructive}
-                    onAction={() => handleDisableIntegration(rcInfo, sourceLine)}
-                  />
-                )}
                 {/* 同一行命令,两种身份:没启用时是"要加进 rc 的那一行",启用后是"已开终端的刷新命令" */}
-                <Action.CopyToClipboard
-                  title={rcInfo.isSourced ? t("st.actionCopyRefresh") : t("st.copySourceCommand")}
-                  icon={Icon.Terminal}
-                  content={sourceLine}
-                />
-                <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
-                <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
-                <Action.Push
-                  title={t("st.actionConfigHistory")}
-                  icon={Icon.Clock}
-                  target={<ShellConfigHistoryView currentConfig={config} onRestored={refreshConfig} />}
-                />
-                <Action.Push
-                  title={t("st.actionRcBackups", { file: rcInfo.rcLabel })}
-                  icon={Icon.SaveDocument}
-                  target={<ShellRcBackupsView rcInfo={rcInfo} />}
-                />
-                {!isShowingDetail && (
-                  <Action.Push
-                    title={t("st.bootstrapLearnMore")}
-                    icon={Icon.Info}
-                    target={
-                      <Detail
-                        markdown={t("st.bootstrapDetailMarkdown", {
-                          sourceLine,
-                          file: rcInfo.rcLabel,
-                          rcPath: rcInfo.rcLabel,
-                        })}
-                        navigationTitle={t("st.bootstrapSection")}
-                      />
-                    }
+                {rcInfo.isSourced ? (
+                  <Action
+                    title={t("st.actionCopyRefresh")}
+                    icon={Icon.Terminal}
+                    onAction={() => copyRefreshCommand(refreshCommand)}
                   />
+                ) : unsupportedShell ? null : (
+                  <Action.CopyToClipboard title={t("st.copySourceCommand")} icon={Icon.Terminal} content={sourceLine} />
                 )}
                 <Action.Push
                   title={t("st.actionNewSnippet")}
@@ -481,6 +470,37 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                   shortcut={Keyboard.Shortcut.Common.New}
                   target={<EditShellSnippetForm shellKind={shellKind} existingGroups={groups} onSave={handleAdd} />}
                 />
+                {!unsupportedShell && (
+                  <Action.Push
+                    title={t("st.actionRcBackups", { file: rcInfo.rcLabel })}
+                    icon={Icon.SaveDocument}
+                    target={<ShellRcBackupsView rcInfo={rcInfo} />}
+                  />
+                )}
+                <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+                <Action.Push
+                  title={t("st.actionConfigHistory")}
+                  icon={Icon.List}
+                  target={<ShellConfigHistoryView currentConfig={config} onRestored={refreshConfig} />}
+                />
+                <Action.ShowInFinder title={t("common.showDataDir")} path={getBaseDir()} />
+                {!isShowingDetail && (
+                  <Action.Push
+                    title={t("st.bootstrapLearnMore")}
+                    icon={Icon.Info}
+                    target={<Detail markdown={bootstrapMarkdown} navigationTitle={t("st.bootstrapSection")} />}
+                  />
+                )}
+                {rcInfo.isSourced && (
+                  <ActionPanel.Section>
+                    <Action
+                      title={t("st.actionDisableIntegration", { file: rcInfo.rcLabel })}
+                      icon={Icon.XMarkCircle}
+                      style={Action.Style.Destructive}
+                      onAction={() => handleDisableIntegration(rcInfo, sourceLine)}
+                    />
+                  </ActionPanel.Section>
+                )}
               </ActionPanel>
             }
           />
@@ -505,22 +525,6 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
           {bucket.snippets.map(renderSnippet)}
         </List.Section>
       ))}
-
-      {config.snippets.length === 0 && !loading && (
-        <List.EmptyView
-          title={t("st.emptyTitle")}
-          description={t("st.emptyDesc")}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title={t("st.actionNewSnippet")}
-                icon={Icon.Plus}
-                target={<EditShellSnippetForm shellKind={shellKind} existingGroups={groups} onSave={handleAdd} />}
-              />
-            </ActionPanel>
-          }
-        />
-      )}
     </List>
   );
 }
@@ -598,28 +602,6 @@ function ShellScriptPreview() {
 }
 
 // 详情面板内容:元信息(类型/状态/排列顺序/备注) + 完整代码,不用再进编辑表单才能看全
-function conflictWhat(conflict: ShellConflict): string {
-  return conflict.kind === "alias"
-    ? t("st.conflictAlias", { name: conflict.name })
-    : t("st.conflictVariable", { name: conflict.name });
-}
-
-function conflictOthers(conflict: ShellConflict, selfId: string): string {
-  return conflict.snippets
-    .filter((x) => x.id !== selfId)
-    .map((x) => x.name)
-    .join("」「");
-}
-
-/** 站在某一段的角度描述一条冲突:跟谁重复、最后听谁的 */
-function describeConflict(conflict: ShellConflict, selfId: string): string {
-  const what = conflictWhat(conflict);
-  const others = conflictOthers(conflict, selfId);
-  if (conflict.effectiveId === selfId) return t("st.conflictLineOnly", { what, others });
-  const effective = conflict.snippets.find((x) => x.id === conflict.effectiveId)?.name ?? "";
-  return t("st.conflictLine", { what, others, effective });
-}
-
 function buildSnippetDetailMarkdown(
   item: ShellSnippet,
   orderIndex: number,
@@ -683,11 +665,16 @@ function SnippetListItem({
   onRestored,
   refreshCommand,
   integrationActive,
+  canMoveUp,
+  canMoveDown,
 }: {
   item: ShellSnippet;
   /** 该片段在 shell.sh 生成顺序里的位置,从 1 开始 */
   orderIndex: number;
   orderTotal: number;
+  /** 同组里还有没有前一条 / 后一条可以换位 */
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   /** 这一段卷入的"重复设置"(跟别的已启用片段设了同一个变量 / alias) */
   conflicts: ShellConflict[];
   /** 同组的全部片段(含自己);没分组时为空 */
@@ -763,46 +750,57 @@ function SnippetListItem({
       }
       actions={
         <ActionPanel>
-          <Action
-            title={item.enabled ? t("st.actionDisable") : t("st.actionEnable")}
-            icon={item.enabled ? Icon.Pause : Icon.Play}
-            onAction={() => onToggle(item.id)}
-          />
-          <Action.Push
-            title={t("st.actionEdit")}
-            icon={Icon.Pencil}
-            shortcut={Keyboard.Shortcut.Common.Edit}
-            target={
-              <EditShellSnippetForm
-                initialData={item}
-                shellKind={shellKind}
-                existingGroups={existingGroups}
-                onSave={(data) => onEdit(item.id, data)}
+          {/* 回车 = 启停(⌘T,跟项目轨对齐);显示明文统一 ⌘⇧M */}
+          <ActionPanel.Section>
+            <Action
+              title={item.enabled ? t("st.actionDisable") : t("st.actionEnable")}
+              icon={item.enabled ? Icon.Pause : Icon.Play}
+              shortcut={{ modifiers: ["cmd"], key: "t" }}
+              onAction={() => onToggle(item.id)}
+            />
+            <Action.Push
+              title={t("st.actionEdit")}
+              icon={Icon.Pencil}
+              shortcut={Keyboard.Shortcut.Common.Edit}
+              target={
+                <EditShellSnippetForm
+                  initialData={item}
+                  shellKind={shellKind}
+                  existingGroups={existingGroups}
+                  onSave={(data) => onEdit(item.id, data)}
+                />
+              }
+            />
+            <Action.Push
+              title={t("st.actionNew")}
+              icon={Icon.Plus}
+              shortcut={Keyboard.Shortcut.Common.New}
+              target={<EditShellSnippetForm shellKind={shellKind} existingGroups={existingGroups} onSave={onAdd} />}
+            />
+            {/* 只跟同组的邻居换位:跟数组邻居换的话片段会从眼前的分区消失 */}
+            {canMoveUp && (
+              <Action
+                title={t("st.actionMoveUp")}
+                icon={Icon.ArrowUp}
+                shortcut={Keyboard.Shortcut.Common.MoveUp}
+                onAction={() => onMove(item.id, "up")}
               />
-            }
-          />
-          <Action.Push
-            title={t("st.actionNew")}
-            icon={Icon.Plus}
-            shortcut={Keyboard.Shortcut.Common.New}
-            target={<EditShellSnippetForm shellKind={shellKind} existingGroups={existingGroups} onSave={onAdd} />}
-          />
-          {orderIndex > 1 && (
+            )}
+            {canMoveDown && (
+              <Action
+                title={t("st.actionMoveDown")}
+                icon={Icon.ArrowDown}
+                shortcut={Keyboard.Shortcut.Common.MoveDown}
+                onAction={() => onMove(item.id, "down")}
+              />
+            )}
             <Action
-              title={t("st.actionMoveUp")}
-              icon={Icon.ArrowUp}
-              shortcut={Keyboard.Shortcut.Common.MoveUp}
-              onAction={() => onMove(item.id, "up")}
+              title={revealSecrets ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
+              icon={revealSecrets ? Icon.EyeDisabled : Icon.Eye}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "m" }}
+              onAction={onToggleReveal}
             />
-          )}
-          {orderIndex < orderTotal && (
-            <Action
-              title={t("st.actionMoveDown")}
-              icon={Icon.ArrowDown}
-              shortcut={Keyboard.Shortcut.Common.MoveDown}
-              onAction={() => onMove(item.id, "down")}
-            />
-          )}
+          </ActionPanel.Section>
           {/* 分组只是散落在每条片段上的字段,区块标题挂不了动作,所以从组里任意一条进 */}
           {group && (
             <ActionPanel.Section title={t("grp.section", { group })}>
@@ -840,37 +838,42 @@ function SnippetListItem({
               />
             </ActionPanel.Section>
           )}
-          <Action
-            title={revealSecrets ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
-            icon={revealSecrets ? Icon.EyeDisabled : Icon.Eye}
-            onAction={onToggleReveal}
-          />
-          <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
-          <Action.Push
-            title={t("st.actionSnippetHistory")}
-            icon={Icon.Clock}
-            target={
-              <ShellConfigHistoryView
-                currentConfig={currentConfig}
-                onRestored={onRestored}
-                focusSnippet={{ id: item.id, name: item.name }}
-              />
-            }
-          />
-          <Action.Push
-            title={t("st.actionConfigHistory")}
-            icon={Icon.Clock}
-            target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
-          />
-          <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
-          <Action.CopyToClipboard title={t("st.actionCopyRefresh")} icon={Icon.Terminal} content={refreshCommand} />
-          <Action
-            title={t("st.actionDelete")}
-            icon={Icon.Trash}
-            style={Action.Style.Destructive}
-            shortcut={{ modifiers: ["cmd"], key: "backspace" }}
-            onAction={() => onDelete(item)}
-          />
+          <ActionPanel.Section title={t("st.sectionHistoryPreview")}>
+            <Action.Push
+              title={t("st.actionSnippetHistory")}
+              icon={Icon.Clock}
+              target={
+                <ShellConfigHistoryView
+                  currentConfig={currentConfig}
+                  onRestored={onRestored}
+                  focusSnippet={{ id: item.id, name: item.name }}
+                />
+              }
+            />
+            <Action.Push
+              title={t("st.actionConfigHistory")}
+              icon={Icon.List}
+              target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
+            />
+            <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+          </ActionPanel.Section>
+          <ActionPanel.Section title={t("st.sectionCopy")}>
+            <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />
+            <Action
+              title={t("st.actionCopyRefresh")}
+              icon={Icon.Terminal}
+              onAction={() => copyRefreshCommand(refreshCommand)}
+            />
+          </ActionPanel.Section>
+          <ActionPanel.Section>
+            <Action
+              title={t("st.actionDelete")}
+              icon={Icon.Trash}
+              style={Action.Style.Destructive}
+              shortcut={{ modifiers: ["cmd"], key: "backspace" }}
+              onAction={() => onDelete(item)}
+            />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     />

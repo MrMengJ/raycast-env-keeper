@@ -316,9 +316,51 @@ export function getShellScriptPath(): string {
   return SHELL_SCRIPT_FILE;
 }
 
+/** 写进 rc 文件里的路径:用 `$HOME`,dotfiles 同步到别的机器也能用 */
+const SHELL_SCRIPT_HOME_PATH = '"$HOME/.env-butler/shell.sh"';
+
+/**
+ * 要写进 rc 文件的那一行。带存在性保护:卸载插件或删掉数据目录之后,每开一个终端都会报"文件不存在",
+ * 用户很难联想到是这个扩展写的那一行;路径用 `$HOME` 并加引号(用户目录含空格、换机器都不坏)
+ */
+export function getShellSourceLine(): string {
+  return `[ -f ${SHELL_SCRIPT_HOME_PATH} ] && source ${SHELL_SCRIPT_HOME_PATH}`;
+}
+
+/** 粘进已开终端的刷新命令(不需要保护,文件不在就让它报错更直观) */
+export function getShellRefreshCommand(): string {
+  return `source ${SHELL_SCRIPT_HOME_PATH}`;
+}
+
+/** 引用 shell.sh 的各种写法:`~/…`、`$HOME/…`、绝对路径,带不带引号 */
+const SHELL_SCRIPT_REF = String.raw`["']?(?:~|\$HOME|\$\{HOME\}|/[^"'\s]*)/\.env-butler/shell\.sh["']?`;
+/** 这一行会真的执行 source(不是注释、不是提到路径的别的命令) */
+const SOURCES_SHELL_SCRIPT_RE = new RegExp(String.raw`(?:^|\s|;|&&|\|\|)(?:source|\.)\s+${SHELL_SCRIPT_REF}(?:\s|;|$)`);
+/**
+ * 是不是 Env Butler 自己写的那一行(整行就是它,前后只允许空白):
+ * 老写法 `source /绝对路径/.env-butler/shell.sh`,新写法带 `[ -f … ] &&` 保护
+ */
+const ENV_BUTLER_LINE_RE = new RegExp(
+  String.raw`^\s*(?:\[\s+-f\s+${SHELL_SCRIPT_REF}\s+\]\s*&&\s*)?source\s+${SHELL_SCRIPT_REF}\s*$`,
+);
+
+/** 这一行是否会让 shell 加载 shell.sh(注释掉的不算;`alias x="cat …/shell.sh"` 这种只是提到路径的也不算) */
+export function isShellSourceLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("#")) return false;
+  return SOURCES_SHELL_SCRIPT_RE.test(trimmed);
+}
+
+/** 这一行是否是 Env Butler 写入的格式(只删这种;用户自己包在 if … fi 里的写法不碰) */
+export function isEnvButlerSourceLine(line: string): boolean {
+  return ENV_BUTLER_LINE_RE.test(line.replace(/\r$/, ""));
+}
+
 export interface ShellRcInfo {
   /** 探测到的登录 shell 类型;unknown 表示既不是 zsh 也不是 bash(如 fish),无法给出确定建议 */
   shellName: "zsh" | "bash" | "unknown";
+  /** 系统用户记录里的登录 shell 路径,如 /opt/homebrew/bin/fish;unknown 时界面用它告诉用户"检测到的是什么" */
+  loginShell: string;
   /** 建议添加 source 行的目标文件绝对路径 */
   rcPath: string;
   /** 给用户看的短路径,如 ~/.zshrc */
@@ -351,7 +393,8 @@ export async function detectShellRc(): Promise<ShellRcInfo> {
   if (existsSync(rcPath)) {
     try {
       const content = await readFile(rcPath, "utf8");
-      isSourced = content.includes(".env-butler/shell.sh");
+      // 只认真正会执行的行:注释掉的那一行不算已接入,否则界面显示"已接入"、启用按钮又被藏起来,没法重新启用
+      isSourced = content.split("\n").some(isShellSourceLine);
     } catch {
       isSourced = false;
     }
@@ -359,6 +402,7 @@ export async function detectShellRc(): Promise<ShellRcInfo> {
 
   return {
     shellName,
+    loginShell,
     rcPath,
     rcLabel: rcPath.replace(home, "~"),
     isSourced,
@@ -507,45 +551,51 @@ export async function appendShellSourceLine(rcPath: string, sourceLine: string):
   return { backupPath };
 }
 
+export interface RemoveSourceLineResult {
+  removed: boolean;
+  backupPath?: string;
+  /** 没删,但文件里有一行用户自己写的 source(比如包在 if … fi 里):不碰,让用户手动处理 */
+  customLineFound?: boolean;
+}
+
 /**
- * 从 shell 配置文件里移除 source shell.sh 那一行(与 appendShellSourceLine 对称)。
- * 匹配"含 .env-butler/shell.sh 的行",不管当初是自动写入还是用户手动加的都能识别;
- * 顺手删掉紧邻在它前面的 "# Added by Env Butler" 标记注释,并收敛删除后留下的多余空行。
+ * 从 shell 配置文件里移除 Env Butler 写入的那一行(与 appendShellSourceLine 对称)。
+ * **只删自己写的格式**(整行就是那句 source,老写法新写法都认),顺手删掉紧邻在它前面的 "# Added by Env Butler" 标记;
+ * 用户自己包在 `if … fi` 里的、或者只是提到这个路径的行一律不碰——按子串删会把 if 体删空,之后每开一个终端都报语法错。
+ * 除了这一两行,文件里其他任何东西都不动:不压空行、不动换行符,写入时说好"只追加不动别的",删除也该对称
  */
-export async function removeShellSourceLine(rcPath: string): Promise<{ removed: boolean; backupPath?: string }> {
+export async function removeShellSourceLine(rcPath: string): Promise<RemoveSourceLineResult> {
   if (!existsSync(rcPath)) return { removed: false };
 
   const content = await readFile(rcPath, "utf8");
   const rawLines = content.split("\n");
   const kept: string[] = [];
   let removed = false;
+  let customLineFound = false;
 
+  // 粗略跟踪块结构:写在 if … fi / { … } / do … done 里面的那一行不算我们的,删了会把块删空、每开一个终端都报语法错
+  let depth = 0;
   for (const line of rawLines) {
-    if (line.includes(".env-butler/shell.sh")) {
+    const trimmed = line.trim().replace(/\r$/, "");
+    const opens = (/^(if|while|until|for|case)\b/.test(trimmed) ? 1 : 0) + (trimmed.match(/\{/g)?.length ?? 0);
+    const closes = (/^(fi|done|esac)\b/.test(trimmed) ? 1 : 0) + (trimmed.match(/\}/g)?.length ?? 0);
+    const insideBlock = depth > 0;
+    if (!insideBlock && isEnvButlerSourceLine(line)) {
       removed = true;
-      if (kept[kept.length - 1]?.trim() === "# Added by Env Butler") {
-        kept.pop();
-      }
+      if (kept[kept.length - 1]?.trim() === "# Added by Env Butler") kept.pop();
+      depth = Math.max(0, depth + opens - closes);
       continue;
     }
+    if (isShellSourceLine(line)) customLineFound = true;
     kept.push(line);
+    depth = Math.max(0, depth + opens - closes);
   }
 
-  if (!removed) return { removed: false };
-
-  // 收敛连续空行(压缩成最多 1 行),文件末尾不留多余空行
-  const collapsed: string[] = [];
-  for (const line of kept) {
-    if (line.trim() === "" && collapsed[collapsed.length - 1]?.trim() === "") continue;
-    collapsed.push(line);
-  }
-  while (collapsed.length > 0 && collapsed[collapsed.length - 1]?.trim() === "") {
-    collapsed.pop();
-  }
+  if (!removed) return { removed: false, customLineFound };
 
   const backupPath = await backupShellRc(rcPath);
-  await writeFileAtomic(rcPath, collapsed.length > 0 ? collapsed.join("\n") + "\n" : "");
-  return { removed: true, backupPath };
+  await writeFileAtomic(rcPath, kept.join("\n"));
+  return { removed: true, backupPath, customLineFound };
 }
 
 /**

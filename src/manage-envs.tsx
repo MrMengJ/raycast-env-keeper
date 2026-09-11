@@ -12,6 +12,7 @@ import {
   Toast,
 } from "@raycast/api";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
   type ProjectMeta,
@@ -33,6 +34,7 @@ import {
 } from "./services/storage.js";
 import { ConfigProblemItem } from "./views/ConfigProblemItem.js";
 import { RelocateProjectForm } from "./views/RelocateProjectForm.js";
+import { RenameProjectForm } from "./views/RenameProjectForm.js";
 import { AddProjectForm } from "./views/AddProjectForm.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
@@ -80,8 +82,9 @@ export default function Command() {
       await Promise.all(
         sorted.map(async (p) => {
           missing[p.id] = !existsSync(p.path);
+          // 只数磁盘上真实存在的:探测函数没有 .env 时也会塞一个占位项,干净的新项目会显示"1 个环境文件"
           const files = await detectProjectEnvFiles(p.path);
-          counts[p.id] = files.length;
+          counts[p.id] = files.filter((f) => existsSync(join(p.path, f))).length;
         }),
       );
       setEnvCounts(counts);
@@ -181,7 +184,7 @@ export default function Command() {
 
       <List.Section title={t("mv.sectionTitle")} subtitle={t("mv.sectionSubtitle", { count: projects.length })}>
         {projects.map((p) => {
-          const envCount = envCounts[p.id] ?? 1;
+          const envCount = envCounts[p.id] ?? 0;
           const dateStr = new Date(p.lastOpenedAt).toLocaleDateString();
           const isMissing = missingPaths[p.id] === true;
 
@@ -199,7 +202,10 @@ export default function Command() {
                 isMissing
                   ? [{ tag: { value: t("mv.missingTag"), color: Color.Orange }, tooltip: t("mv.missingTooltip") }]
                   : [
-                      { text: t("mv.envCountAccessory", { count: envCount }) },
+                      {
+                        text:
+                          envCount === 0 ? t("mv.noEnvFilesAccessory") : t("mv.envCountAccessory", { count: envCount }),
+                      },
                       { text: t("mv.lastOpenedAccessory", { date: dateStr }) },
                     ]
               }
@@ -225,6 +231,12 @@ export default function Command() {
                     icon={Icon.Plus}
                     shortcut={Keyboard.Shortcut.Common.New}
                     target={<AddProjectForm onProjectAdded={() => refreshProjects()} />}
+                  />
+                  <Action.Push
+                    title={t("mv.actionRename")}
+                    icon={Icon.Pencil}
+                    shortcut={Keyboard.Shortcut.Common.Edit}
+                    target={<RenameProjectForm project={p} onDone={() => refreshProjects()} />}
                   />
                   <Action.OpenWith
                     title={t("mv.actionOpenWith")}
@@ -253,9 +265,11 @@ export default function Command() {
           description={t("mv.emptyDesc")}
           actions={
             <ActionPanel>
+              {/* 空状态文案写着"按 ⌘N",此前这里没绑快捷键,按了没反应 */}
               <Action.Push
                 title={t("mv.actionAddProject")}
                 icon={Icon.Plus}
+                shortcut={Keyboard.Shortcut.Common.New}
                 target={<AddProjectForm onProjectAdded={() => refreshProjects()} />}
               />
             </ActionPanel>

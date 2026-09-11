@@ -2,6 +2,7 @@ import { Action, ActionPanel, Color, Icon, List, showToast, Toast } from "@rayca
 import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
+  findShellConflicts,
   listPresetsForProject,
   type Preset,
   type ProjectMeta,
@@ -21,6 +22,7 @@ import {
 import { PresetsStandaloneView } from "./views/PresetsStandaloneView.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
+import { conflictOthers, conflictWhat } from "./views/shellConflictText.js";
 
 /**
  * Jump To:打几个字直接到插件里的某个地方。
@@ -82,6 +84,18 @@ export default function Command() {
 
   // 从启动器直接热插拔,不用进列表。读最新的再改,别拿这一页的旧快照去覆盖
   const handleToggleSnippet = async (id: string) => {
+    try {
+      await toggleSnippet(id);
+    } catch (e) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: t("common.saveFailedTitle"),
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  const toggleSnippet = async (id: string) => {
     const latest = await loadShellConfig();
     if (latest.problem) {
       // 配置文件坏了就别在这里改;去 Shell 轨,那里有完整的提示和处理入口
@@ -100,7 +114,19 @@ export default function Command() {
     const updated = toggleShellSnippet(latest.data, id);
     await saveShellConfig(updated);
     setShell(updated);
-    await showToast({ style: Toast.Style.Success, title: t("st.toggledToast") });
+    // 跟 Shell 轨一致:启用后撞上同名变量 / alias 要提一句
+    const conflict = findShellConflicts(updated.snippets).find((c) => c.snippets.some((x) => x.id === id));
+    await showToast({
+      style: Toast.Style.Success,
+      title: t("st.toggledToast"),
+      message: conflict
+        ? t("st.conflictToast", {
+            what: conflictWhat(conflict),
+            others: conflictOthers(conflict, id),
+            effective: conflict.snippets.find((x) => x.id === conflict.effectiveId)?.name ?? "",
+          })
+        : undefined,
+    });
   };
 
   const total = projects.length + envFiles.length + presets.length + shell.snippets.length;
@@ -217,6 +243,7 @@ export default function Command() {
                   <Action
                     title={snippet.enabled ? t("st.actionDisable") : t("st.actionEnable")}
                     icon={snippet.enabled ? Icon.Pause : Icon.Play}
+                    shortcut={{ modifiers: ["cmd"], key: "t" }}
                     onAction={() => handleToggleSnippet(snippet.id)}
                   />
                 </ActionPanel>

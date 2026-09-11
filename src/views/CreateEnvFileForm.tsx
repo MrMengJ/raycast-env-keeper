@@ -60,6 +60,7 @@ export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormP
 
   return (
     <Form
+      navigationTitle={t("cf.submitTitle")}
       actions={
         <ActionPanel>
           <Action.SubmitForm title={t("cf.submitTitle")} onSubmit={handleSubmit} />

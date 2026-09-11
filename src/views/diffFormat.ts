@@ -42,7 +42,7 @@ export function envValueDisplayer(
 ): (key: string, value: string) => string {
   return (key, value) => {
     if (reveal) return value;
-    return isSecretKey(key, customSecrets) || isEncryptedValue(value) ? maskSecret(value) : value;
+    return isSecretKey(key, customSecrets, value) || isEncryptedValue(value) ? maskSecret(value) : value;
   };
 }
 
@@ -81,6 +81,9 @@ export function formatEnvDiff(entries: EnvDiffEntry[], displayValue: (key: strin
       }
       if (e.baseDisabled !== e.targetDisabled) {
         parts.push(e.targetDisabled ? t("diff.turnedOff") : t("diff.turnedOn"));
+      }
+      if ((e.baseComment ?? "") !== (e.targetComment ?? "")) {
+        parts.push(t("diff.commentChanged", { from: e.baseComment ?? "-", to: e.targetComment ?? "-" }));
       }
       return `${t("diff.changed")} \`${e.key}\`：${parts.join("，")}`;
     })

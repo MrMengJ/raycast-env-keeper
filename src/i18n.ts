@@ -14,7 +14,6 @@ const zh = {
   "common.save": "保存",
   "common.cancel": "取消",
   "common.delete": "删除",
-  "common.confirm": "确认",
   "common.saveFailedTitle": "保存失败",
   "common.searchPlaceholder": "搜索...",
   "common.showDataDir": "在访达中显示数据目录（换机拷这个目录即可）",
@@ -42,11 +41,19 @@ const zh = {
   "mv.sectionTitle": "已登记项目",
   "mv.sectionSubtitle": "{count} 个项目",
   "mv.envCountAccessory": "{count} 个环境文件",
+  "mv.noEnvFilesAccessory": "还没有环境文件",
   "mv.lastOpenedAccessory": "访问于 {date}",
   "mv.actionManage": "管理环境变量",
   "mv.actionAddProject": "登记新项目",
   "mv.actionOpenWith": "用其他应用打开",
   "mv.actionRemove": "不再管理此项目",
+  "mv.actionRename": "重命名项目",
+  "rp.navTitle": "重命名「{name}」",
+  "rp.description": "只改在 Env Butler 里显示的名字，不会动磁盘上的文件夹（{path}）。",
+  "rp.nameTitle": "项目名称",
+  "rp.nameEmptyError": "请输入项目名称",
+  "rp.submitTitle": "保存名称",
+  "rp.renamedToast": "已改名为「{name}」",
   "mv.missingTag": "路径不存在",
   "mv.missingTooltip": "这个目录已经不在了，可能被改名或搬走了",
   "mv.actionRelocate": "重新指向新目录",
@@ -151,6 +158,10 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "pd.lockTooltip": "敏感字段 (已打码)",
   "pd.disabledTag": "已注释",
   "pd.duplicateTag": "重复",
+  "pd.overwriteConfirmTitle": "{file} 里已经有 {key} 了",
+  "pd.overwriteConfirmMessage": "继续保存会把它现在的值换掉（原内容会进快照）。要覆盖吗？",
+  "pd.overwriteConfirmAction": "覆盖",
+  "pd.overwriteCancelled": "没有保存，原来的值还在",
   "pd.exportTooltip": "这一行带 export 前缀。dotenv 认这种写法，source 进 shell 也能用",
   "pd.duplicateTooltip":
     "文件里有 {count} 行 {key}。程序通常只认其中一行（dotenv 取第一行，有的库取最后一行），建议只留一行",
@@ -173,6 +184,8 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "ps.sectionTitle": "方案",
   "ps.applyMenuTitle": "套用方案",
   "ps.saveAsNew": "存为新方案",
+  "ps.sectionCreate": "新建",
+  "ps.nameDuplicateError": "本项目已经有同名方案了，换一个名字",
   "ps.createBlank": "新建空白方案",
   "ps.blankContentPlaceholder": "KEY=value\n# 一行一个,写法跟 .env 一样",
   "ps.actionDuplicate": "复制一份",
@@ -419,10 +432,23 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.bootstrapReadyTitle": "✅ Shell 集成已启用",
   "st.bootstrapReadySubtitle": "已在 {file} 检测到相关配置；改动对新开的终端生效",
   "st.bootstrapPendingTitle": "还差一步：启用 Shell 集成",
-  "st.bootstrapUnknownTitle": "未识别到 zsh/bash，请手动把这一行添加到你的 shell 配置文件末尾：",
+  "st.bootstrapUnknownTitle": "Shell 轨目前只支持 zsh 和 bash",
   "st.bootstrapLearnMore": "了解详情",
   "st.copySourceCommand": "复制这一行",
   "st.actionCopyRefresh": "复制刷新命令（让已开的终端拿到新增和修改）",
+  "st.refreshCopiedTitle": "已复制刷新命令",
+  "st.refreshCopiedMessage": "粘进已开的终端能拿到新增和修改；停用或删除的要新开终端才会消失",
+  "st.noSnippetsHint": "还没有片段，按 ⌘N 新建",
+  "st.sectionHistoryPreview": "历史与预览",
+  "st.sectionCopy": "复制",
+  "st.unsupportedShellSubtitle": "检测到你的登录 shell 是 {shell}，生成的脚本在里面用不了",
+  "st.unsupportedShellDetail": `# Shell 轨目前只支持 zsh 和 bash
+
+检测到你的登录 shell 是 \`{shell}\`。
+
+Env Butler 生成的 \`shell.sh\` 用的是 zsh / bash 的写法（\`export A=B\`、\`alias x=y\`），在别的 shell 里没法直接加载，所以这里不提供「启用 Shell 集成」和配置文件备份。
+
+片段本身照样可以管理和预览；如果你同时也用 zsh 或 bash，可以把生成的文件手动 source 进那个 shell 的配置。`,
   "st.actionEnableIntegration": "启用 Shell 集成（写入 {file}）",
   "st.enableConfirmTitle": "启用 Shell 集成？",
   "st.enableConfirmMessage":
@@ -433,11 +459,13 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.actionDisableIntegration": "禁用 Shell 集成（从 {file} 移除）",
   "st.disableConfirmTitle": "禁用 Shell 集成？",
   "st.disableConfirmMessage":
-    "会从 {file} 移除 Env Butler 写入的这一行：\n\n{sourceLine}\n\n之后新开的终端窗口就不会再加载你在 Shell 轨配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
+    "会从 {file} 移除 Env Butler 写入的那一行 source（只删这一行，别的内容不动）。之后新开的终端窗口就不会再加载你在 Shell 轨配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
   "st.disableConfirmAction": "移除",
   "st.disabledIntegrationToast": "已从 {file} 移除，Shell 集成已禁用",
   "st.disableNotFoundTitle": "{file} 里没有找到 Env Butler 写入的那一行",
   "st.disableNotFoundMessage": "可能已经手动删除过；Shell 集成本来就没有接入",
+  "st.disableCustomLineTitle": "{file} 里的那一行不是 Env Butler 写入的格式",
+  "st.disableCustomLineMessage": "可能是你自己改过或包在了 if 里。为了不弄坏你的配置，没有动它，请手动删除",
   "st.disableFailedTitle": "禁用失败",
   "st.bootstrapDetailMarkdown": `# 为什么要做这一步？
 
@@ -470,7 +498,7 @@ Env Butler 把你在 Shell 轨里添加、且处于"启用"状态的全局环境
 - **已经开着的终端**：它在启动那一刻读过一次配置，之后不会自己更新。在里面执行下面这行，能拿到**新增和修改**的变量、alias（操作里有「复制刷新命令」）：
 
 \`\`\`
-{sourceLine}
+{refreshCommand}
 \`\`\`
 
 - **停用或删除的片段**，上面这行拿不掉——变量和 alias 已经在那个终端里了，重新读文件不会把它们清掉。要么开个新终端，要么自己 \`unset 变量名\` / \`unalias 别名\`。
@@ -479,8 +507,6 @@ Env Butler 把你在 Shell 轨里添加、且处于"启用"状态的全局环境
 
 Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到了，这条提示会自动变成"✅ Shell 集成已启用"，不会重复提醒你。`,
   "st.actionNewSnippet": "新建 Shell 片段",
-  "st.emptyTitle": "暂无 Shell 片段",
-  "st.emptyDesc": "点击回车或 ⌘N 添加你的第一个全局环境变量、alias 或 Shell 片段",
   "st.actionDisable": "停用该片段",
   "st.actionEnable": "启用该片段",
   "st.actionEdit": "编辑片段",
@@ -521,12 +547,13 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "es.descPlaceholder": "简要描述此片段用途",
   "es.enabledLabel": "启用此片段 (生成至 ~/.env-butler/shell.sh)",
   "es.submitTitle": "保存片段",
+  "es.navCreate": "新建片段",
+  "es.navEdit": "编辑「{name}」",
 
   // ---- 快照历史 ----
   "sh.searchPlaceholder": "搜索历史快照...",
   "sh.sectionTitle": "快照历史 - {file}",
   "sh.sectionSubtitle": "{count} 份安全备份",
-  "sh.sizeAccessory": "{size} KB",
   "sh.actionRestore": "回滚到此版本",
   "sh.actionCopyContent": "复制快照内容",
   "sh.actionDelete": "删除该快照",
@@ -586,7 +613,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "jt.emptyDesc": "这里只按名字找项目、环境文件、方案和 Shell 片段；要找变量请用 Search Env Vars",
   "jt.loadFailedTitle": "加载失败",
   "jt.problemHint": "去 Shell 轨看看怎么处理",
-  "search.placeholder": "搜索所有项目、方案和 Shell 轨的变量名 / 变量值...",
+  "search.placeholder": "搜变量名、值，或所在的项目 / 片段 / 分组名...",
   "search.loadFailedTitle": "加载变量失败",
   "search.sectionTitle": "环境文件里的",
   "search.sectionShell": "Shell 轨",
@@ -605,7 +632,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "search.actionCopyKey": "复制变量名 (KEY)",
   "search.lockTooltip": "敏感字段",
   "search.emptyTitle": "未搜索到匹配的变量",
-  "search.emptyDesc": "尝试搜索其他关键词，或在 Manage Envs 中登记新项目",
+  "search.emptyDesc": "换个关键词试试。要找项目、环境文件、方案或片段本身，用 Jump to",
 
   // ---- 历史差异区(项目轨快照 / Shell 配置历史共用) ----
   "diff.fromPrevHeading": "上一版 → 此版本",
@@ -621,6 +648,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "diff.addedDisabled": "（加进来时就是注释状态）",
   "diff.turnedOff": "被注释掉了，不再生效",
   "diff.turnedOn": "取消了注释，重新生效",
+  "diff.commentChanged": "注释 {from} → {to}",
   "diff.renamed": "（原名 {name}）",
 
   // ---- .zshrc 备份 ----
@@ -638,6 +666,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "rcb.contentEmpty": "（空文件）",
   "rcb.unreadable": "这份备份读不出来，文件可能已损坏",
   "rcb.actionBackupNow": "立即备份 {file}",
+  "rcb.sectionBackup": "再存一份",
   "rcb.actionBackupTo": "备份到其他位置...",
   "rcb.actionRestore": "用这份备份覆盖 {file}",
   "rcb.actionShowInFinder": "在访达中显示这份备份",
@@ -667,7 +696,6 @@ const en: Record<DictKey, string> = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.delete": "Delete",
-  "common.confirm": "Confirm",
   "common.saveFailedTitle": "Save Failed",
   "common.searchPlaceholder": "Search...",
   "common.showDataDir": "Show Data Folder in Finder (copy it to move to a new machine)",
@@ -699,11 +727,19 @@ const en: Record<DictKey, string> = {
   "mv.sectionTitle": "Registered Projects",
   "mv.sectionSubtitle": "{count} project(s)",
   "mv.envCountAccessory": "{count} env file(s)",
+  "mv.noEnvFilesAccessory": "No env files yet",
   "mv.lastOpenedAccessory": "Opened {date}",
   "mv.actionManage": "Manage Environment Variables",
   "mv.actionAddProject": "Register New Project",
   "mv.actionOpenWith": "Open With...",
   "mv.actionRemove": "Stop Managing This Project",
+  "mv.actionRename": "Rename Project",
+  "rp.navTitle": 'Rename "{name}"',
+  "rp.description": "Only changes the name shown in Env Butler. The folder on disk ({path}) is untouched.",
+  "rp.nameTitle": "Project Name",
+  "rp.nameEmptyError": "Please enter a project name",
+  "rp.submitTitle": "Save Name",
+  "rp.renamedToast": 'Renamed to "{name}"',
   "mv.missingTag": "Path Missing",
   "mv.missingTooltip": "This folder is gone — it may have been renamed or moved",
   "mv.actionRelocate": "Point to a New Folder",
@@ -809,6 +845,11 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "pd.lockTooltip": "Sensitive field (masked)",
   "pd.disabledTag": "Commented",
   "pd.duplicateTag": "Duplicate",
+  "pd.overwriteConfirmTitle": "{file} already has {key}",
+  "pd.overwriteConfirmMessage":
+    "Saving will replace its current value (the old content goes into a snapshot). Overwrite?",
+  "pd.overwriteConfirmAction": "Overwrite",
+  "pd.overwriteCancelled": "Not saved; the existing value is unchanged",
   "pd.exportTooltip": "This line has an export prefix. dotenv accepts it, and it also works when sourced into a shell",
   "pd.duplicateTooltip":
     "{key} appears on {count} lines. Most loaders only honor one of them (dotenv keeps the first, some keep the last). Keep a single line",
@@ -831,6 +872,8 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ps.sectionTitle": "Profiles",
   "ps.applyMenuTitle": "Apply Profile",
   "ps.saveAsNew": "Save as New Profile",
+  "ps.sectionCreate": "Create",
+  "ps.nameDuplicateError": "This project already has a profile with that name",
   "ps.createBlank": "New Blank Profile",
   "ps.blankContentPlaceholder": "KEY=value\n# one per line, same syntax as .env",
   "ps.actionDuplicate": "Duplicate",
@@ -1078,11 +1121,24 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.bootstrapReadyTitle": "✅ Shell Integration Enabled",
   "st.bootstrapReadySubtitle": "Found the matching config in {file}; changes take effect in new terminals",
   "st.bootstrapPendingTitle": "One step left: enable Shell integration",
-  "st.bootstrapUnknownTitle":
-    "Couldn't detect zsh/bash — please manually add this line to the end of your shell config file:",
+  "st.bootstrapUnknownTitle": "The Shell track only supports zsh and bash for now",
   "st.bootstrapLearnMore": "Learn More",
   "st.copySourceCommand": "Copy This Line",
   "st.actionCopyRefresh": "Copy Refresh Command (for terminals already open)",
+  "st.refreshCopiedTitle": "Refresh command copied",
+  "st.refreshCopiedMessage":
+    "Paste it into an open terminal to pick up additions and edits; disabled or deleted items only go away in a new terminal",
+  "st.noSnippetsHint": "No snippets yet — press ⌘N to add one",
+  "st.sectionHistoryPreview": "History & Preview",
+  "st.sectionCopy": "Copy",
+  "st.unsupportedShellSubtitle": "Your login shell is {shell}; the generated script will not work there",
+  "st.unsupportedShellDetail": `# The Shell track only supports zsh and bash for now
+
+Your login shell was detected as \`{shell}\`.
+
+The \`shell.sh\` Env Butler generates uses zsh / bash syntax (\`export A=B\`, \`alias x=y\`) and cannot be loaded by other shells, so "Enable Shell Integration" and rc-file backups are not offered here.
+
+You can still manage and preview snippets; if you also use zsh or bash, source the generated file from that shell's config by hand.`,
   "st.actionEnableIntegration": "Enable Shell Integration (Write to {file})",
   "st.enableConfirmTitle": "Enable Shell integration?",
   "st.enableConfirmMessage":
@@ -1093,11 +1149,14 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.actionDisableIntegration": "Disable Shell Integration (Remove from {file})",
   "st.disableConfirmTitle": "Disable Shell integration?",
   "st.disableConfirmMessage":
-    "This removes the line Env Butler wrote to {file}:\n\n{sourceLine}\n\nNew terminal windows will stop loading the variables/aliases/snippets from your Shell track (already-open windows are unaffected). Remove it?",
+    "This removes the source line Env Butler wrote to {file} (only that line; nothing else is touched). New terminal windows will stop loading the variables/aliases/snippets from your Shell track (already-open windows are unaffected). Remove it?",
   "st.disableConfirmAction": "Remove",
   "st.disabledIntegrationToast": "Removed from {file} — Shell integration disabled",
   "st.disableNotFoundTitle": "No Env Butler line found in {file}",
   "st.disableNotFoundMessage": "It may have been removed by hand; Shell integration was not connected",
+  "st.disableCustomLineTitle": "The source line in {file} is not in Env Butler's format",
+  "st.disableCustomLineMessage":
+    "It may have been edited or wrapped in an if block. It was left untouched to avoid breaking your config; please remove it by hand",
   "st.disableFailedTitle": "Disable Failed",
   "st.bootstrapDetailMarkdown": `# Why is this step needed?
 
@@ -1130,7 +1189,7 @@ Open a new terminal window and your snippets will take effect. From then on, whe
 - **Terminals already open**: they read the config once at startup and never re-read it. Run this line inside them to pick up **added and edited** variables and aliases (there is a "Copy Refresh Command" action):
 
 \`\`\`
-{sourceLine}
+{refreshCommand}
 \`\`\`
 
 - **Disabled or deleted snippets** cannot be undone this way — the variables and aliases are already in that shell, and re-reading the file will not remove them. Open a new terminal, or \`unset NAME\` / \`unalias NAME\` by hand.
@@ -1139,8 +1198,6 @@ Open a new terminal window and your snippets will take effect. From then on, whe
 
 Every time you open this view, Env Butler checks whether {file} already contains this line — once it does, this notice automatically switches to "✅ Shell Integration Enabled" and won't nag you again.`,
   "st.actionNewSnippet": "New Shell Snippet",
-  "st.emptyTitle": "No Shell Snippets Yet",
-  "st.emptyDesc": "Press Enter or ⌘N to add your first global env var, alias, or shell snippet",
   "st.actionDisable": "Disable Snippet",
   "st.actionEnable": "Enable Snippet",
   "st.actionEdit": "Edit Snippet",
@@ -1180,11 +1237,12 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "es.descPlaceholder": "Briefly describe what this snippet does",
   "es.enabledLabel": "Enable this snippet (generated into ~/.env-butler/shell.sh)",
   "es.submitTitle": "Save Snippet",
+  "es.navCreate": "New Snippet",
+  "es.navEdit": 'Edit "{name}"',
 
   "sh.searchPlaceholder": "Search snapshot history...",
   "sh.sectionTitle": "Snapshot History - {file}",
   "sh.sectionSubtitle": "{count} backup(s)",
-  "sh.sizeAccessory": "{size} KB",
   "sh.actionRestore": "Restore This Version",
   "sh.actionCopyContent": "Copy Snapshot Content",
   "sh.actionDelete": "Delete This Snapshot",
@@ -1246,7 +1304,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
     "This finds projects, env files, profiles and shell snippets by name; use Search Env Vars for variables",
   "jt.loadFailedTitle": "Failed to Load",
   "jt.problemHint": "Open the Shell track to see how to fix it",
-  "search.placeholder": "Search names and values across projects, profiles and the Shell track...",
+  "search.placeholder": "Search variable names, values, or the project / snippet / group they belong to...",
   "search.loadFailedTitle": "Failed to Load Variables",
   "search.sectionTitle": "In Env Files",
   "search.sectionShell": "Shell Track",
@@ -1265,7 +1323,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "search.actionCopyKey": "Copy Key",
   "search.lockTooltip": "Sensitive field",
   "search.emptyTitle": "No Matching Variables",
-  "search.emptyDesc": "Try a different keyword, or register a new project in Manage Envs",
+  "search.emptyDesc": "Try another keyword. To find a project, env file, profile or snippet itself, use Jump to",
 
   // ---- Diff sections (shared by .env snapshots and Shell config history) ----
   "diff.fromPrevHeading": "Previous version → this one",
@@ -1281,6 +1339,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "diff.addedDisabled": "(added already commented out)",
   "diff.turnedOff": "commented out, no longer in effect",
   "diff.turnedOn": "uncommented, in effect again",
+  "diff.commentChanged": "comment {from} → {to}",
   "diff.renamed": "(previously {name})",
 
   // ---- .zshrc backups ----
@@ -1299,6 +1358,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "rcb.contentEmpty": "(empty file)",
   "rcb.unreadable": "This backup cannot be read — the file may be damaged",
   "rcb.actionBackupNow": "Back Up {file} Now",
+  "rcb.sectionBackup": "Make Another Backup",
   "rcb.actionBackupTo": "Back Up To Another Location...",
   "rcb.actionRestore": "Overwrite {file} With This Backup",
   "rcb.actionShowInFinder": "Show This Backup in Finder",

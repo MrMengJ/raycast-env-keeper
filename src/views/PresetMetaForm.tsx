@@ -18,6 +18,8 @@ interface PresetMetaFormProps {
   initialData?: Pick<Preset, "name" | "note" | "group">;
   /** 本项目已经用过的分组名,列在下拉框里供选 */
   existingGroups: string[];
+  /** 本项目其它方案的名字(编辑时不含自己):同名方案在套用菜单里长得一模一样,不让存 */
+  existingNames?: string[];
   /**
    * 新建时提供:要存进去的内容,只读预览且打码。
    * 这一步不给改——改内容的入口在「管理方案」里,那里用户是明确要看明文的
@@ -36,6 +38,7 @@ interface PresetMetaFormProps {
 export function PresetMetaForm({
   initialData,
   existingGroups,
+  existingNames = [],
   contentPreview,
   editableContent,
   navTitle,
@@ -52,6 +55,10 @@ export function PresetMetaForm({
     const trimmedName = name.trim();
     if (!trimmedName) {
       setNameError(t("ps.nameEmptyError"));
+      return;
+    }
+    if (existingNames.includes(trimmedName)) {
+      setNameError(t("ps.nameDuplicateError"));
       return;
     }
     try {
