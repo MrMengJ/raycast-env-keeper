@@ -23,7 +23,7 @@ const zh = {
   "cfg.sectionTitle": "需要你处理",
   "cfg.corruptedTitle": "配置文件读不出来，已保住原文件",
   "cfg.corruptedSubtitle": "原文件已改名为 {name}，里面的内容还在。把格式修好后改回原名就能恢复",
-  "cfg.tooNewTitle": "配置文件来自更新版本的 Env Butler",
+  "cfg.tooNewTitle": "配置文件来自更新版本的 Env Keeper",
   "cfg.tooNewSubtitle":
     "文件版本 {version}，当前扩展只认到 {current}。原文件已改名为 {name}，升级扩展后改回原名即可恢复",
   "cfg.showBackup": "在访达中显示原文件",
@@ -49,7 +49,7 @@ const zh = {
   "mv.actionRemove": "不再管理此项目",
   "mv.actionRename": "重命名项目",
   "rp.navTitle": "重命名「{name}」",
-  "rp.description": "只改在 Env Butler 里显示的名字，不会动磁盘上的文件夹（{path}）。",
+  "rp.description": "只改在 Env Keeper 里显示的名字，不会动磁盘上的文件夹（{path}）。",
   "rp.nameTitle": "项目名称",
   "rp.nameEmptyError": "请输入项目名称",
   "rp.submitTitle": "保存名称",
@@ -66,7 +66,7 @@ const zh = {
   "mv.relocatedToast": "已重新指向新目录",
   "mv.removeConfirmTitle": "移除项目：{name}",
   "mv.removeConfirmMessage":
-    "只会把这个项目从 Env Butler 的项目列表里移除（连同它在 Env Butler 里的方案），不会删除磁盘上的目录或 .env 文件。",
+    "只会把这个项目从 Env Keeper 的项目列表里移除（连同它在 Env Keeper 里的方案），不会删除磁盘上的目录或 .env 文件。",
   "mv.removeConfirmAction": "移除",
   "mv.loadRegistryFailedTitle": "项目列表加载失败",
   "mv.removedToastTitle": "已移除项目：{name}",
@@ -74,7 +74,7 @@ const zh = {
   "mv.emptyDesc": "按回车或 ⌘N 登记第一个项目目录，开始管理它的环境变量。",
 
   // ---- 添加项目表单 ----
-  "addProject.description": "选择项目的根目录，Env Butler 会自动找到里面的 .env 文件并接手管理。",
+  "addProject.description": "选择项目的根目录，Env Keeper 会自动找到里面的 .env 文件并接手管理。",
   "addProject.pathTitle": "项目目录",
   "addProject.pathError": "请选择一个项目目录",
   "addProject.nameTitle": "项目显示名称",
@@ -107,21 +107,21 @@ const zh = {
   "pd.copyOverwriteConfirmAction": "覆盖",
   "pd.copiedAsMainEnvToast": "已将 {file} 复制为 .env",
   "pd.envrcTitle": "这个项目里有 .envrc（direnv）",
-  "pd.envrcSubtitle": "Env Butler 不会改动 .envrc，请自己确认 direnv 的设置和 .env 能配合使用",
+  "pd.envrcSubtitle": "Env Keeper 不会改动 .envrc，请自己确认 direnv 的设置和 .env 能配合使用",
   "pd.envrcLearnMore": "了解详情",
   "pd.envrcDismiss": "不再提示此项目",
   "pd.envrcDismissedToast": "已关闭该项目的 .envrc 提示",
   "pd.envrcDetailMarkdown": `# .envrc 是什么？
 
-**direnv** 是一个第三方 shell 工具（不是 Env Butler 的功能）。装了它之后，你 \`cd\` 进一个带 \`.envrc\` 文件的目录时，终端会自动加载这个文件里定义的环境变量；\`cd\` 离开时自动卸载。
+**direnv** 是一个第三方 shell 工具（不是 Env Keeper 的功能）。装了它之后，你 \`cd\` 进一个带 \`.envrc\` 文件的目录时，终端会自动加载这个文件里定义的环境变量；\`cd\` 离开时自动卸载。
 
 有些项目会在 \`.envrc\` 里写类似 \`dotenv .env.development\` 的命令，让 direnv 把某个 .env 文件的内容自动灌进你的终端；也有项目只是单纯 \`export\` 几个变量，跟 .env 文件完全无关。
 
-## 为什么 Env Butler 要提醒你
+## 为什么 Env Keeper 要提醒你
 
-Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际生效**的环境变量是由 direnv 决定的——两者可能不同步：改完 .env 存盘后，通常还需要在终端执行 \`direnv reload\`（或重新 \`cd\` 一次）才会让新内容真正生效。
+Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际生效**的环境变量是由 direnv 决定的——两者可能不同步：改完 .env 存盘后，通常还需要在终端执行 \`direnv reload\`（或重新 \`cd\` 一次）才会让新内容真正生效。
 
-## Env Butler 会怎么做
+## Env Keeper 会怎么做
 
 **绝不会**读取、解析或修改你的 .envrc 文件——具体逻辑完全由你和 direnv 掌控，这里只是提醒它的存在，避免你误以为"改完 .env 终端就自动同步了"。
 
@@ -361,7 +361,7 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.actionPreviewScript": "查看生成的 shell.sh",
   "st.previewTitle": "生成的 shell.sh",
   "st.previewIntro":
-    "这是 Env Butler 根据你启用的片段实际生成的文件。**列表里是按类型分组显示的，这里才是真正的执行顺序**——shell 从上往下执行，后面的片段能用到前面定义的变量。",
+    "这是 Env Keeper 根据你启用的片段实际生成的文件。**列表里是按类型分组显示的，这里才是真正的执行顺序**——shell 从上往下执行，后面的片段能用到前面定义的变量。",
   "st.previewPathLabel": "文件路径",
   "st.previewEmpty": "还没有生成内容——可能是一个片段都没有，或者启用的片段都是空的。",
   "st.previewCopy": "复制整个文件内容",
@@ -392,7 +392,7 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "sch.sectionTitle": "Shell 配置历史",
   "sch.sectionSubtitle": "{count} 份",
   "sch.emptyTitle": "还没有历史记录",
-  "sch.emptyDesc": "每次改动 Shell 片段前，Env Butler 都会把改动前的配置存一份到这里",
+  "sch.emptyDesc": "每次改动 Shell 片段前，Env Keeper 都会把改动前的配置存一份到这里",
   "sch.infoHeading": "这份记录",
   "sch.infoRecordedAt": "记录时间",
   "sch.infoFileSize": "大小",
@@ -431,7 +431,7 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.bootstrapSection": "Shell 集成",
   "st.sectionSnippets": "片段",
   "st.bootstrapReadyTitle": "✅ Shell 集成已启用",
-  "st.bootstrapReadySubtitle": "已在 {file} 里找到 Env Butler 写入的那一行；改动对新开的终端生效",
+  "st.bootstrapReadySubtitle": "已在 {file} 里找到 Env Keeper 写入的那一行；改动对新开的终端生效",
   "st.bootstrapPendingTitle": "还差一步：启用 Shell 集成",
   "st.bootstrapUnknownTitle": "全局环境目前只支持 zsh 和 bash",
   "st.bootstrapLearnMore": "了解详情",
@@ -447,51 +447,51 @@ Env Butler 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
 
 检测到你的登录 shell 是 \`{shell}\`。
 
-Env Butler 生成的 \`shell.sh\` 用的是 zsh / bash 的写法（\`export A=B\`、\`alias x=y\`），在别的 shell 里没法直接加载，所以这里不提供「启用 Shell 集成」和配置文件备份。
+Env Keeper 生成的 \`shell.sh\` 用的是 zsh / bash 的写法（\`export A=B\`、\`alias x=y\`），在别的 shell 里没法直接加载，所以这里不提供「启用 Shell 集成」和配置文件备份。
 
 片段本身照样可以管理和预览；如果你同时也用 zsh 或 bash，可以把生成的文件手动 source 进那个 shell 的配置。`,
   "st.actionEnableIntegration": "启用 Shell 集成（写入 {file}）",
   "st.enableConfirmTitle": "启用 Shell 集成？",
   "st.enableConfirmMessage":
-    "Env Butler 会在 {file} 末尾追加这一行：\n\n{sourceLine}\n\n不会修改你已有的任何内容，随时可以用「禁用 Shell 集成」移除。确定现在写入吗？",
+    "Env Keeper 会在 {file} 末尾追加这一行：\n\n{sourceLine}\n\n不会修改你已有的任何内容，随时可以用「禁用 Shell 集成」移除。确定现在写入吗？",
   "st.enableConfirmAction": "写入",
   "st.enabledIntegrationToast": "已启用 Shell 集成，开一个新终端窗口即可生效",
   "st.enableFailedTitle": "启用失败",
   "st.actionDisableIntegration": "禁用 Shell 集成（从 {file} 移除）",
   "st.disableConfirmTitle": "禁用 Shell 集成？",
   "st.disableConfirmMessage":
-    "会从 {file} 移除 Env Butler 写入的那一行 source（只删这一行，别的内容不动）。之后新开的终端窗口就不会再加载你在全局环境配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
+    "会从 {file} 移除 Env Keeper 写入的那一行 source（只删这一行，别的内容不动）。之后新开的终端窗口就不会再加载你在全局环境配置的变量/alias/片段了（已有终端窗口不受影响）。确定要移除吗？",
   "st.disableConfirmAction": "移除",
   "st.disabledIntegrationToast": "已从 {file} 移除，Shell 集成已禁用",
-  "st.disableNotFoundTitle": "{file} 里没有找到 Env Butler 写入的那一行",
+  "st.disableNotFoundTitle": "{file} 里没有找到 Env Keeper 写入的那一行",
   "st.disableNotFoundMessage": "可能已经手动删除过，或者 Shell 集成本来就没启用过",
-  "st.disableCustomLineTitle": "{file} 里的那一行不是 Env Butler 写入的格式",
+  "st.disableCustomLineTitle": "{file} 里的那一行不是 Env Keeper 写入的格式",
   "st.disableCustomLineMessage": "可能是你自己改过或包在了 if 里。为了不弄坏你的配置，没有动它，请手动删除",
   "st.disableFailedTitle": "禁用失败",
   "st.bootstrapDetailMarkdown": `# 为什么要做这一步？
 
-Env Butler 把你在全局环境里添加、且处于「启用」状态的全局环境变量、alias、脚本片段，编译成了一个文件：
+Env Keeper 把你在全局环境里添加、且处于「启用」状态的全局环境变量、alias、脚本片段，编译成了一个文件：
 
 \`\`\`
 {sourceLine}
 \`\`\`
 
-但这个文件不会自己生效——zsh/bash 只会在启动终端时读取你的配置文件（比如 \`~/.zshrc\`），不会主动去找 Env Butler 生成的文件。所以需要在配置文件末尾加上面这一行，告诉 shell "启动时也读一下这个文件"。
+但这个文件不会自己生效——zsh/bash 只会在启动终端时读取你的配置文件（比如 \`~/.zshrc\`），不会主动去找 Env Keeper 生成的文件。所以需要在配置文件末尾加上面这一行，告诉 shell "启动时也读一下这个文件"。
 
 ## 怎么启用
 
 跟 全局环境里片段的"启用/停用"是同一套逻辑，两种方式都行：
 
-- **启用 Shell 集成**（推荐）：点这个操作，Env Butler 会帮你把这一行追加到 **{file}** 末尾，不会动你已有的任何内容。
+- **启用 Shell 集成**（推荐）：点这个操作，Env Keeper 会帮你把这一行追加到 **{file}** 末尾，不会动你已有的任何内容。
 - **复制这一行**：如果你想自己动手，也可以复制后手动粘贴进 **{file}**。
 
 ## 不想要了怎么办
 
-启用之后，这条提示会变成"✅ Shell 集成已启用"，操作里会多一个 **禁用 Shell 集成**——点一下就会把 Env Butler 加的那一行从 {file} 里干净移除，不影响你已有的其它配置，随时可以再启用回来。
+启用之后，这条提示会变成"✅ Shell 集成已启用"，操作里会多一个 **禁用 Shell 集成**——点一下就会把 Env Keeper 加的那一行从 {file} 里干净移除，不影响你已有的其它配置，随时可以再启用回来。
 
 ## 启用之后
 
-打开一个新的终端窗口，片段就会生效。之后你在全局环境里增删改片段，Env Butler 都会自动重新生成这个文件，不需要重复启用这一步。
+打开一个新的终端窗口，片段就会生效。之后你在全局环境里增删改片段，Env Keeper 都会自动重新生成这个文件，不需要重复启用这一步。
 
 ## 改完什么时候生效
 
@@ -506,7 +506,7 @@ Env Butler 把你在全局环境里添加、且处于「启用」状态的全局
 
 ## 怎么知道自己启用没启用
 
-Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到了，这条提示会自动变成"✅ Shell 集成已启用"，不会重复提醒你。`,
+Env Keeper 每次打开都会检测 {file} 里有没有这一行——检测到了，这条提示会自动变成"✅ Shell 集成已启用"，不会重复提醒你。`,
   "st.actionNewSnippet": "新建 Shell 片段",
   "st.actionDisable": "停用该片段",
   "st.actionEnable": "启用该片段",
@@ -584,7 +584,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "sh.deletedToast": "已删除快照",
   "sh.unreadableContent": "（无法读取快照内容）",
   "sh.emptyTitle": "暂无快照",
-  "sh.emptyDesc": "在 Env Butler 里修改并保存环境变量后，这里会自动留下快照。",
+  "sh.emptyDesc": "在 Env Keeper 里修改并保存环境变量后，这里会自动留下快照。",
   "sh.infoHeading": "快照信息",
   "sh.infoTargetFile": "目标文件",
   "sh.infoRecordedAt": "记录时间",
@@ -672,7 +672,7 @@ Env Butler 每次打开都会检测 {file} 里有没有这一行——检测到�
   "rcb.actionShowInFinder": "在访达中显示这份备份",
   "rcb.actionDelete": "删除这份备份",
   "rcb.backupToNavTitle": "备份到其他位置",
-  "rcb.backupToDescription": "会把 {file} 原样复制一份。不选目录就存进 Env Butler 自己的备份目录：{dir}",
+  "rcb.backupToDescription": "会把 {file} 原样复制一份。不选目录就存进 Env Keeper 自己的备份目录：{dir}",
   "rcb.backupToDirTitle": "存到哪里",
   "rcb.backupToDirInfo": "留空则使用默认备份目录",
   "rcb.backupSubmit": "备份",
@@ -706,7 +706,7 @@ const en: Record<DictKey, string> = {
   "cfg.corruptedTitle": "Could not read the config file — the original was kept",
   "cfg.corruptedSubtitle":
     "The original was renamed to {name} and still holds your data. Fix its format and rename it back to restore it",
-  "cfg.tooNewTitle": "This config file comes from a newer Env Butler",
+  "cfg.tooNewTitle": "This config file comes from a newer Env Keeper",
   "cfg.tooNewSubtitle":
     "The file is version {version}, but this version of the extension only understands up to {current}. The original was renamed to {name} — update the extension and rename it back to restore it",
   "cfg.showBackup": "Show Original File in Finder",
@@ -735,7 +735,7 @@ const en: Record<DictKey, string> = {
   "mv.actionRemove": "Stop Managing This Project",
   "mv.actionRename": "Rename Project",
   "rp.navTitle": 'Rename "{name}"',
-  "rp.description": "Only changes the name shown in Env Butler. The folder on disk ({path}) is untouched.",
+  "rp.description": "Only changes the name shown in Env Keeper. The folder on disk ({path}) is untouched.",
   "rp.nameTitle": "Project Name",
   "rp.nameEmptyError": "Please enter a project name",
   "rp.submitTitle": "Save Name",
@@ -753,7 +753,7 @@ const en: Record<DictKey, string> = {
   "mv.relocatedToast": "Now pointing at the new folder",
   "mv.removeConfirmTitle": "Remove Project: {name}",
   "mv.removeConfirmMessage":
-    "This only removes the project from Env Butler's list (along with the profiles Env Butler keeps for it). The folder on disk and its .env files are never deleted.",
+    "This only removes the project from Env Keeper's list (along with the profiles Env Keeper keeps for it). The folder on disk and its .env files are never deleted.",
   "mv.removeConfirmAction": "Remove",
   "mv.loadRegistryFailedTitle": "Could Not Load Project List",
   "mv.removedToastTitle": "Removed project: {name}",
@@ -761,7 +761,7 @@ const en: Record<DictKey, string> = {
   "mv.emptyDesc": "Press Enter or ⌘N to register your first project folder and start managing its env vars.",
 
   "addProject.description":
-    "Choose the project's root folder. Env Butler will find and manage the .env files inside it.",
+    "Choose the project's root folder. Env Keeper will find and manage the .env files inside it.",
   "addProject.pathTitle": "Project Folder",
   "addProject.pathError": "Please choose a project folder",
   "addProject.nameTitle": "Display Name",
@@ -773,7 +773,7 @@ const en: Record<DictKey, string> = {
   "pd.readFailedTitle": "Failed to Read Env File",
   "pd.secretOnToast": "Marked as sensitive (this project only)",
   "pd.secretOffToast": "Unmarked as sensitive (this project only)",
-  "pd.conflictTitle": "File Changed Outside Env Butler",
+  "pd.conflictTitle": "File Changed Outside Env Keeper",
   "pd.conflictMessage":
     '{file} was modified by another program while you were editing. Choose "Discard Mine" to drop your changes and load the latest content; choose "Force Overwrite" to overwrite the external changes with yours.',
   "pd.conflictOverwrite": "Force Overwrite",
@@ -793,21 +793,21 @@ const en: Record<DictKey, string> = {
   "pd.copyOverwriteConfirmAction": "Overwrite",
   "pd.copiedAsMainEnvToast": "Copied {file} as .env",
   "pd.envrcTitle": "This project has an .envrc (direnv)",
-  "pd.envrcSubtitle": "Env Butler will not modify .envrc — please make sure your direnv setup works together with .env",
+  "pd.envrcSubtitle": "Env Keeper will not modify .envrc — please make sure your direnv setup works together with .env",
   "pd.envrcLearnMore": "Learn More",
   "pd.envrcDismiss": "Don't Show Again for This Project",
   "pd.envrcDismissedToast": "Won't show the .envrc notice for this project again",
   "pd.envrcDetailMarkdown": `# What is .envrc?
 
-**direnv** is a third-party shell tool (not a feature of Env Butler). Once installed, it automatically loads the environment variables defined in \`.envrc\` when you \`cd\` into a directory that contains one, and unloads them when you leave.
+**direnv** is a third-party shell tool (not a feature of Env Keeper). Once installed, it automatically loads the environment variables defined in \`.envrc\` when you \`cd\` into a directory that contains one, and unloads them when you leave.
 
 Some projects put a command like \`dotenv .env.development\` in \`.envrc\` so direnv pipes a specific .env file's content straight into your terminal; other projects just \`export\` a few variables with no relation to any .env file at all.
 
-## Why Env Butler flags this
+## Why Env Keeper flags this
 
-Env Butler edits the .env file on disk directly, but the environment variables **actually active in your terminal** are decided by direnv — the two can drift out of sync: after saving changes via Env Butler, you usually still need to run \`direnv reload\` (or \`cd\` back in) in your terminal for the new content to actually take effect.
+Env Keeper edits the .env file on disk directly, but the environment variables **actually active in your terminal** are decided by direnv — the two can drift out of sync: after saving changes via Env Keeper, you usually still need to run \`direnv reload\` (or \`cd\` back in) in your terminal for the new content to actually take effect.
 
-## What Env Butler does about it
+## What Env Keeper does about it
 
 It will **never** read, parse, or modify your \`.envrc\` file — that logic stays entirely under your and direnv's control. This notice only exists so you're not surprised that editing .env here doesn't automatically sync to your shell.
 
@@ -1050,7 +1050,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.actionPreviewScript": "View Generated shell.sh",
   "st.previewTitle": "Generated shell.sh",
   "st.previewIntro":
-    "This is the file Env Butler actually generates from your enabled snippets. **The list groups snippets by type, but this is the real execution order** — the shell runs top to bottom, so later snippets can use what earlier ones define.",
+    "This is the file Env Keeper actually generates from your enabled snippets. **The list groups snippets by type, but this is the real execution order** — the shell runs top to bottom, so later snippets can use what earlier ones define.",
   "st.previewPathLabel": "File path",
   "st.previewEmpty": "Nothing generated yet — either there are no snippets, or every enabled snippet is empty.",
   "st.previewCopy": "Copy Whole File",
@@ -1081,7 +1081,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "sch.sectionTitle": "Shell Config History",
   "sch.sectionSubtitle": "{count} entries",
   "sch.emptyTitle": "No history yet",
-  "sch.emptyDesc": "Before every change to your Shell snippets, Env Butler saves the previous config here",
+  "sch.emptyDesc": "Before every change to your Shell snippets, Env Keeper saves the previous config here",
   "sch.infoHeading": "This entry",
   "sch.infoRecordedAt": "Recorded at",
   "sch.infoFileSize": "Size",
@@ -1121,7 +1121,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.bootstrapSection": "Shell Integration",
   "st.sectionSnippets": "Snippets",
   "st.bootstrapReadyTitle": "✅ Shell Integration Enabled",
-  "st.bootstrapReadySubtitle": "Found Env Butler's line in {file}; changes take effect in new terminals",
+  "st.bootstrapReadySubtitle": "Found Env Keeper's line in {file}; changes take effect in new terminals",
   "st.bootstrapPendingTitle": "One step left: enable Shell integration",
   "st.bootstrapUnknownTitle": "Global Shell currently supports zsh and bash only",
   "st.bootstrapLearnMore": "Learn More",
@@ -1138,52 +1138,52 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
 
 Your login shell was detected as \`{shell}\`.
 
-The \`shell.sh\` Env Butler generates uses zsh / bash syntax (\`export A=B\`, \`alias x=y\`) and cannot be loaded by other shells, so "Enable Shell Integration" and rc-file backups are not offered here.
+The \`shell.sh\` Env Keeper generates uses zsh / bash syntax (\`export A=B\`, \`alias x=y\`) and cannot be loaded by other shells, so "Enable Shell Integration" and rc-file backups are not offered here.
 
 You can still manage and preview snippets; if you also use zsh or bash, source the generated file from that shell's config by hand.`,
   "st.actionEnableIntegration": "Enable Shell Integration (Write to {file})",
   "st.enableConfirmTitle": "Enable Shell integration?",
   "st.enableConfirmMessage":
-    "Env Butler will append this line to the end of {file}:\n\n{sourceLine}\n\nIt won't touch anything you already have there, and you can always use “Disable Shell Integration” to remove it. Write it now?",
+    "Env Keeper will append this line to the end of {file}:\n\n{sourceLine}\n\nIt won't touch anything you already have there, and you can always use “Disable Shell Integration” to remove it. Write it now?",
   "st.enableConfirmAction": "Write",
   "st.enabledIntegrationToast": "Shell integration enabled — open a new terminal window for it to take effect",
   "st.enableFailedTitle": "Enable Failed",
   "st.actionDisableIntegration": "Disable Shell Integration (Remove from {file})",
   "st.disableConfirmTitle": "Disable Shell integration?",
   "st.disableConfirmMessage":
-    "This removes the source line Env Butler wrote to {file} (only that line; nothing else is touched). New terminal windows will stop loading the variables/aliases/snippets from your Global Shell (already-open windows are unaffected). Remove it?",
+    "This removes the source line Env Keeper wrote to {file} (only that line; nothing else is touched). New terminal windows will stop loading the variables/aliases/snippets from your Global Shell (already-open windows are unaffected). Remove it?",
   "st.disableConfirmAction": "Remove",
   "st.disabledIntegrationToast": "Removed from {file} — Shell integration disabled",
-  "st.disableNotFoundTitle": "No Env Butler line found in {file}",
+  "st.disableNotFoundTitle": "No Env Keeper line found in {file}",
   "st.disableNotFoundMessage": "It may have been removed by hand, or Shell integration was never enabled",
-  "st.disableCustomLineTitle": "The source line in {file} is not in Env Butler's format",
+  "st.disableCustomLineTitle": "The source line in {file} is not in Env Keeper's format",
   "st.disableCustomLineMessage":
     "It may have been edited or wrapped in an if block. It was left untouched to avoid breaking your config; please remove it by hand",
   "st.disableFailedTitle": "Disable Failed",
   "st.bootstrapDetailMarkdown": `# Why is this step needed?
 
-Env Butler compiles the global environment variables, aliases, and snippets you've added (and enabled) in the Global Shell into one file:
+Env Keeper compiles the global environment variables, aliases, and snippets you've added (and enabled) in the Global Shell into one file:
 
 \`\`\`
 {sourceLine}
 \`\`\`
 
-But this file doesn't take effect on its own — zsh/bash only read your config file (e.g. \`~/.zshrc\`) when a terminal starts; they won't look for the file Env Butler generates on their own. So one line needs to be added to the end of your config file telling your shell to "also read this file on startup".
+But this file doesn't take effect on its own — zsh/bash only read your config file (e.g. \`~/.zshrc\`) when a terminal starts; they won't look for the file Env Keeper generates on their own. So one line needs to be added to the end of your config file telling your shell to "also read this file on startup".
 
 ## How to enable it
 
 Same logic as enabling/disabling a snippet — either works:
 
-- **Enable Shell Integration** (recommended): Env Butler appends the line for you, without touching anything else already in **{file}**.
+- **Enable Shell Integration** (recommended): Env Keeper appends the line for you, without touching anything else already in **{file}**.
 - **Copy This Line**: copy it and paste it into **{file}** yourself if you'd rather do it by hand.
 
 ## Changed your mind?
 
-Once enabled, this notice switches to "✅ Shell Integration Enabled" and a **Disable Shell Integration** action appears — it cleanly removes the line Env Butler added from {file}, without touching anything else, and you can re-enable it anytime.
+Once enabled, this notice switches to "✅ Shell Integration Enabled" and a **Disable Shell Integration** action appears — it cleanly removes the line Env Keeper added from {file}, without touching anything else, and you can re-enable it anytime.
 
 ## After enabling it
 
-Open a new terminal window and your snippets will take effect. From then on, whenever you add/edit/remove snippets in the Global Shell, Env Butler regenerates this file automatically — no need to repeat this step.
+Open a new terminal window and your snippets will take effect. From then on, whenever you add/edit/remove snippets in the Global Shell, Env Keeper regenerates this file automatically — no need to repeat this step.
 
 ## When do changes take effect?
 
@@ -1198,7 +1198,7 @@ Open a new terminal window and your snippets will take effect. From then on, whe
 
 ## How do I know if it's enabled?
 
-Every time you open this view, Env Butler checks whether {file} already contains this line — once it does, this notice automatically switches to "✅ Shell Integration Enabled" and won't nag you again.`,
+Every time you open this view, Env Keeper checks whether {file} already contains this line — once it does, this notice automatically switches to "✅ Shell Integration Enabled" and won't nag you again.`,
   "st.actionNewSnippet": "New Shell Snippet",
   "st.actionDisable": "Disable Snippet",
   "st.actionEnable": "Enable Snippet",
@@ -1276,7 +1276,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "sh.deletedToast": "Snapshot deleted",
   "sh.unreadableContent": "(Unable to read snapshot content)",
   "sh.emptyTitle": "No Snapshots Yet",
-  "sh.emptyDesc": "Snapshots appear here automatically once you edit and save environment variables in Env Butler.",
+  "sh.emptyDesc": "Snapshots appear here automatically once you edit and save environment variables in Env Keeper.",
   "sh.infoHeading": "Snapshot Info",
   "sh.infoTargetFile": "Target File",
   "sh.infoRecordedAt": "Recorded At",
@@ -1366,7 +1366,7 @@ Every time you open this view, Env Butler checks whether {file} already contains
   "rcb.actionDelete": "Delete This Backup",
   "rcb.backupToNavTitle": "Back Up to Another Location",
   "rcb.backupToDescription":
-    "Copies {file} as-is. If you don't pick a folder, it goes to Env Butler's own backup folder: {dir}",
+    "Copies {file} as-is. If you don't pick a folder, it goes to Env Keeper's own backup folder: {dir}",
   "rcb.backupToDirTitle": "Save to",
   "rcb.backupToDirInfo": "Leave empty to use the default backup folder",
   "rcb.backupSubmit": "Back Up",

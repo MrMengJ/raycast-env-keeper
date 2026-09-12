@@ -1,4 +1,4 @@
-# Env Butler Changelog
+# Env Keeper Changelog
 
 ## [Initial Version] - {PR_MERGE_DATE}
 

@@ -337,7 +337,7 @@ const SHELL_SCRIPT_REF = String.raw`["']?(?:~|\$HOME|\$\{HOME\}|/[^"'\s]*)/\.env
 /** 这一行会真的执行 source(不是注释、不是提到路径的别的命令) */
 const SOURCES_SHELL_SCRIPT_RE = new RegExp(String.raw`(?:^|\s|;|&&|\|\|)(?:source|\.)\s+${SHELL_SCRIPT_REF}(?:\s|;|$)`);
 /**
- * 是不是 Env Butler 自己写的那一行(整行就是它,前后只允许空白):
+ * 是不是 Env Keeper 自己写的那一行(整行就是它,前后只允许空白):
  * 老写法 `source /绝对路径/.env-butler/shell.sh`,新写法带 `[ -f … ] &&` 保护
  */
 const ENV_BUTLER_LINE_RE = new RegExp(
@@ -351,7 +351,7 @@ export function isShellSourceLine(line: string): boolean {
   return SOURCES_SHELL_SCRIPT_RE.test(trimmed);
 }
 
-/** 这一行是否是 Env Butler 写入的格式(只删这种;用户自己包在 if … fi 里的写法不碰) */
+/** 这一行是否是 Env Keeper 写入的格式(只删这种;用户自己包在 if … fi 里的写法不碰) */
 export function isEnvButlerSourceLine(line: string): boolean {
   return ENV_BUTLER_LINE_RE.test(line.replace(/\r$/, ""));
 }
@@ -532,8 +532,12 @@ export async function restoreShellRcBackup(backupPath: string, rcPath: string): 
  * 把 source 那一行追加到用户的 shell 配置文件末尾(仅追加,不改动已有任何内容)
  * 用一段带标记的注释包住,方便用户日后自己识别/手动删除
  */
+/** 写进 rc 的标记注释。老用户的 rc 里是 "# Added by Env Butler"(改名前),移除时两种都认 */
+const RC_MARKER = "# Added by Env Keeper";
+const RC_MARKERS = new Set([RC_MARKER, "# Added by Env Butler"]);
+
 export async function appendShellSourceLine(rcPath: string, sourceLine: string): Promise<{ backupPath?: string }> {
-  const block = `# Added by Env Butler\n${sourceLine}\n`;
+  const block = `${RC_MARKER}\n${sourceLine}\n`;
   const backupPath = await backupShellRc(rcPath);
 
   if (!existsSync(rcPath)) {
@@ -559,8 +563,8 @@ export interface RemoveSourceLineResult {
 }
 
 /**
- * 从 shell 配置文件里移除 Env Butler 写入的那一行(与 appendShellSourceLine 对称)。
- * **只删自己写的格式**(整行就是那句 source,老写法新写法都认),顺手删掉紧邻在它前面的 "# Added by Env Butler" 标记;
+ * 从 shell 配置文件里移除 Env Keeper 写入的那一行(与 appendShellSourceLine 对称)。
+ * **只删自己写的格式**(整行就是那句 source,老写法新写法都认),顺手删掉紧邻在它前面的标记注释(新的 "Added by Env Keeper"、改名前的 "Added by Env Butler" 都认);
  * 用户自己包在 `if … fi` 里的、或者只是提到这个路径的行一律不碰——按子串删会把 if 体删空,之后每开一个终端都报语法错。
  * 除了这一两行,文件里其他任何东西都不动:不压空行、不动换行符,写入时说好"只追加不动别的",删除也该对称
  */
@@ -582,7 +586,7 @@ export async function removeShellSourceLine(rcPath: string): Promise<RemoveSourc
     const insideBlock = depth > 0;
     if (!insideBlock && isEnvButlerSourceLine(line)) {
       removed = true;
-      if (kept[kept.length - 1]?.trim() === "# Added by Env Butler") kept.pop();
+      if (RC_MARKERS.has(kept[kept.length - 1]?.trim() ?? "")) kept.pop();
       depth = Math.max(0, depth + opens - closes);
       continue;
     }

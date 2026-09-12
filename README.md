@@ -1,4 +1,4 @@
-# Env Butler
+# Env Keeper
 
 在 Raycast 里管理所有项目的 `.env` 文件和全局 shell 配置。**本地、免费、键盘优先。**
 
@@ -8,7 +8,7 @@
 
 `.env` 散落在各个项目里,全局环境变量藏在 `~/.zshrc` 里。想看某个密钥在哪个项目配过、
 想临时停用一个变量、想给团队生成一份 `.env.example`——都得手动翻文件。
-Env Butler 把这些事收进一个键盘驱动的面板。
+Env Keeper 把这些事收进一个键盘驱动的面板。
 
 ## 三个卖点
 
@@ -49,7 +49,7 @@ Env Butler 把这些事收进一个键盘驱动的面板。
 
 - 打码**只影响显示**。`.env` 和 `shell.sh` 里必须是明文,否则程序和 shell 读不到。
   它防的是别人瞄到你的屏幕,不是防文件被读走
-- 扩展**不做加密**。要加密请用 [dotenvx](https://dotenvx.com);Env Butler 能识别
+- 扩展**不做加密**。要加密请用 [dotenvx](https://dotenvx.com);Env Keeper 能识别
   `encrypted:` 前缀并阻止你误改
 - 扩展**绝不读取或修改 `.envrc`**,只会在检测到时提醒你 direnv 的存在
 
