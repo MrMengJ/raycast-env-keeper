@@ -10,6 +10,7 @@ import {
   type ProjectMeta,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
 import { diffSection, formatEnvDiff } from "./diffFormat.js";
@@ -190,7 +191,7 @@ export function SnapshotHistoryView({
       "",
       `**${t("sh.infoRecordedAt")}**: \`${prettyTimestamp(item.timestampStr)}\``,
       "",
-      `**${t("sh.infoFileSize")}**: \`${item.size} bytes\``,
+      `**${t("sh.infoFileSize")}**: \`${formatFileSize(item.size)}\``,
       "",
       "---",
       "",

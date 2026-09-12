@@ -43,7 +43,11 @@ export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormP
     try {
       const result = await createEnvFile(projectPath, targetFilename);
       if (!result.created) {
-        setSuffixError(t("cf.alreadyExistsError", { filename: targetFilename }));
+        setSuffixError(
+          result.notAFile
+            ? t("cf.nameTakenByNonFile", { filename: targetFilename })
+            : t("cf.alreadyExistsError", { filename: targetFilename }),
+        );
         return;
       }
       await showToast({ style: Toast.Style.Success, title: t("cf.successToast", { filename: targetFilename }) });

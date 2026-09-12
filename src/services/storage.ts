@@ -1,4 +1,5 @@
 import {
+  chmod,
   copyFile,
   mkdir,
   readdir,
@@ -40,8 +41,10 @@ import {
   parsePresetsFile,
   CURRENT_PRESETS_VERSION,
   isEnvFilename,
+  ENV_TMP_MARKER,
 } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { type ValidatableShell, validateShellSyntax } from "./shellValidator.js";
 
 const BASE_DIR = join(homedir(), ".env-butler");
 const REGISTRY_FILE = join(BASE_DIR, "registry.json");
@@ -65,13 +68,61 @@ function fileTimestamp(date = new Date()): string {
 }
 
 /**
+ * 数据目录下新建的目录一律 0700(只有属主能进),新建的文件一律 0600(只有属主能读写)。
+ * 这两条都只作用于"新建":mkdir / writeFile 对已存在的路径不会改权限,
+ * 用户自己 chmod 放宽过就一直是他设的那个,插件不跟他抢
+ */
+const PRIVATE_DIR_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
+
+/** 在数据目录下建目录:只有属主能进。只对新建生效,mkdir 不会改已存在目录的权限 */
+function mkdirPrivate(dir: string): Promise<string | undefined> {
+  return mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+}
+
+/** 取一个已存在文件的权限位;取不到返回 undefined(调用方按新建处理) */
+async function modeOf(filePath: string): Promise<number | undefined> {
+  try {
+    return (await stat(filePath)).mode & 0o777;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 同一个目标路径的写入排队进行。
+ * 临时文件名是按目标文件固定的(不用时间戳,见 writeFileAtomic 里的说明),
+ * 所以两次并发写同一个目标会互相踩掉对方的临时文件——启动时两个视图同时 loadRegistry 就会撞上
+ */
+const writeLocks = new Map<string, Promise<void>>();
+
+async function withFileLock<T>(target: string, task: () => Promise<T>): Promise<T> {
+  const previous = writeLocks.get(target) ?? Promise.resolve();
+  const current = previous.then(task, task);
+  const settled = current.then(
+    () => undefined,
+    () => undefined,
+  );
+  writeLocks.set(target, settled);
+  try {
+    return await current;
+  } finally {
+    // 自己已经是队尾就清掉,免得 Map 跟着快照这类一次性路径一直涨
+    if (writeLocks.get(target) === settled) writeLocks.delete(target);
+  }
+}
+
+/**
  * 原子写:先写同目录下的临时文件,再 rename 覆盖目标。
  * 同一文件系统内 rename 是原子的——读到的要么是完整的旧文件、要么是完整的新文件,
  * 不会出现"写到一半进程被杀"留下的残缺内容(Raycast 被系统内存回收过,这不是假想)。
+ * 临时文件必须待在目标文件所在目录:跨文件系统的 rename 没有原子性保证,而项目常在另一个卷上
  *
- * 两个必须处理的细节:
+ * 三个必须处理的细节:
  * - 目标是符号链接时先解析真实路径,否则 rename 会把链接本身换掉
  * - 保留原文件权限:用户可能把 .env chmod 600 过,不能因为一次保存又放开成 644
+ * - 临时文件自己按 0600 写、名字以 `.env` 开头:前者让它在存在的那一小段时间里也读不到,
+ *   后者让项目的 `.env*` 忽略规则能挡住崩溃留下的残片
  */
 export async function writeFileAtomic(filePath: string, content: string, explicitMode?: number): Promise<void> {
   let target = filePath;
@@ -88,23 +139,32 @@ export async function writeFileAtomic(filePath: string, content: string, explici
     try {
       mode = (await stat(target)).mode & 0o777;
     } catch {
-      // 拿不到就用系统默认
+      // 拿不到就当新建处理
     }
   }
+  const finalMode = mode ?? PRIVATE_FILE_MODE;
 
   const dir = dirname(target);
-  const tmpPath = join(dir, `.${basename(target)}.env-butler-tmp-${process.pid}-${Date.now()}`);
-  try {
-    await writeFile(tmpPath, content, mode === undefined ? { encoding: "utf8" } : { encoding: "utf8", mode });
-    await rename(tmpPath, target);
-  } catch (e) {
+  // 名字固定(只有进程号,不带时间戳):崩溃留下的残片下次写同一个文件时会被直接覆盖,
+  // 不会一组一次地攒起来。并发由上面的 withFileLock 挡住
+  const tmpPath = join(dir, `${basename(target)}${ENV_TMP_MARKER}-${process.pid}`);
+  return withFileLock(target, async () => {
     try {
-      await unlink(tmpPath);
-    } catch {
-      // 临时文件清不掉不影响主流程
+      await writeFile(tmpPath, content, { encoding: "utf8", mode: PRIVATE_FILE_MODE });
+      await rename(tmpPath, target);
+      if (finalMode !== PRIVATE_FILE_MODE) {
+        // 内容这时已经就位,权限调不回去不影响文件本身,所以失败不抛
+        await chmod(target, finalMode).catch(() => {});
+      }
+    } catch (e) {
+      try {
+        await unlink(tmpPath);
+      } catch {
+        // 临时文件清不掉不影响主流程
+      }
+      throw e;
     }
-    throw e;
-  }
+  });
 }
 
 /**
@@ -179,7 +239,7 @@ async function snapshotConfigBeforeWrite(
 
   const dir = configHistoryDir(kind);
   try {
-    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    if (!existsSync(dir)) await mkdirPrivate(dir);
     const snapshotPath = await uniqueSnapshotPath(dir, `${formatSnapshotTimestamp()}.${configFileName(kind)}`);
     await writeFileAtomic(snapshotPath, oldContent);
 
@@ -418,7 +478,7 @@ export async function detectShellRc(): Promise<ShellRcInfo> {
 export async function backupShellRc(rcPath: string): Promise<string | undefined> {
   if (!existsSync(rcPath)) return undefined;
   try {
-    await mkdir(BACKUPS_DIR, { recursive: true });
+    await mkdirPrivate(BACKUPS_DIR);
     // 必须走 uniqueBackupPath:时间戳只精确到秒,同一秒内的第二次备份会直接
     // 覆盖掉第一份。"手动存一份 → 立刻恢复"正好落在同一秒里,
     // 结果是安全备份把用户刚存的那份原件盖掉,恢复出来的反而是坏内容
@@ -607,10 +667,10 @@ export async function removeShellSourceLine(rcPath: string): Promise<RemoveSourc
  */
 export async function ensureStorageDirs(): Promise<void> {
   if (!existsSync(BASE_DIR)) {
-    await mkdir(BASE_DIR, { recursive: true });
+    await mkdirPrivate(BASE_DIR);
   }
   if (!existsSync(SNAPSHOTS_DIR)) {
-    await mkdir(SNAPSHOTS_DIR, { recursive: true });
+    await mkdirPrivate(SNAPSHOTS_DIR);
   }
 }
 
@@ -688,18 +748,42 @@ export async function loadShellConfig(): Promise<LoadResult<ShellConfig>> {
 }
 
 /**
- * 保存 Shell 配置并同步生成 ~/.env-butler/shell.sh (设置可执行权限)
+ * 磁盘上那份 shell.sh 的语法是否正常(文件不存在算正常)。
+ * 用来区分"这次改动把脚本改坏了"和"本来就坏着":后者不该拦住所有片段操作——
+ * 用户已经有一个坏片段时,连关掉别的片段都做不了,那是把人锁在门外
+ */
+async function currentScriptIsValid(shellKind: ValidatableShell | undefined): Promise<boolean> {
+  if (!existsSync(SHELL_SCRIPT_FILE)) return true;
+  try {
+    return (await validateShellSyntax(await readFile(SHELL_SCRIPT_FILE, "utf8"), shellKind)).valid;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * 保存 Shell 配置并同步生成 shell.sh(0600:被 source 读取不需要执行位,里面有明文密钥)
+ *
+ * 写盘前先让登录 shell 检查一遍整份脚本的语法:片段名里的换行 core 那边已经清洗过,
+ * 但两个各自合法的片段拼在一起也可能不合法(比如一个少了 `fi`)。坏脚本会被每个新开的终端执行,
+ * 所以这一次会把它改坏就不保存——而且要在写 shell.json 之前就查,否则会出现 json 更新了、sh 没更新
  */
 export async function saveShellConfig(config: ShellConfig): Promise<ConfigSnapshotResult> {
   await ensureStorageDirs();
   await assertConfigWritable(SHELL_CONFIG_FILE, parseShellConfig);
+
+  const scriptContent = generateShellScript(config.snippets);
+  const { shellName } = await detectShellRc();
+  const shellKind = shellName === "zsh" || shellName === "bash" ? shellName : undefined;
+  const syntax = await validateShellSyntax(scriptContent, shellKind);
+  if (!syntax.valid && (await currentScriptIsValid(shellKind))) {
+    throw new Error(`${t("st.syntaxErrorHint", { shell: shellKind ?? "" })}\n${syntax.error ?? ""}`.trim());
+  }
+
   const next = formatShellConfig(config);
   const snapshot = await snapshotConfigBeforeWrite("shell", SHELL_CONFIG_FILE, next);
   await writeFileAtomic(SHELL_CONFIG_FILE, next);
-  const scriptContent = generateShellScript(config.snippets);
-  // shell.sh 必须显式带上可执行位:走临时文件 + rename 的话权限跟的是临时文件,
-  // 不显式指定就会丢掉 0o755
-  await writeFileAtomic(SHELL_SCRIPT_FILE, scriptContent, 0o755);
+  await writeFileAtomic(SHELL_SCRIPT_FILE, scriptContent, PRIVATE_FILE_MODE);
   return snapshot;
 }
 
@@ -763,9 +847,26 @@ export async function detectProjectEnvFiles(projectPath: string): Promise<string
   if (!existsSync(projectPath)) return [];
   try {
     const entries = await readdir(projectPath, { withFileTypes: true });
-    const envFiles = entries.filter((e) => e.isFile() && isEnvFilename(e.name)).map((e) => e.name);
+    const envFiles: string[] = [];
 
-    if (!envFiles.includes(".env")) {
+    for (const entry of entries) {
+      if (!isEnvFilename(entry.name)) continue;
+      if (entry.isFile()) {
+        envFiles.push(entry.name);
+        continue;
+      }
+      // 软链解开后是普通文件就算一个:密钥集中放在别处、各项目用链接指过去是常见做法。
+      // 写入本来就会先解析真实路径(见 writeFileAtomic),不会把链接换成普通文件,
+      // 所以"跟着链接跑到项目外"这件事不存在——链接指向哪是用户自己定的
+      if (entry.isSymbolicLink() && (await isRegularFile(join(projectPath, entry.name)))) {
+        envFiles.push(entry.name);
+      }
+      // 名字合法但既不是文件、也不是指向文件的链接(典型:叫 .env 的文件夹):不列出来,
+      // 列了就是点一下就报 EISDIR
+    }
+
+    // `.env` 排最前,方便直接新建;但它已经存在(哪怕是个文件夹)就不补这个占位
+    if (!envFiles.includes(".env") && !entries.some((e) => e.name === ".env")) {
       envFiles.unshift(".env");
     }
     return envFiles;
@@ -774,14 +875,27 @@ export async function detectProjectEnvFiles(projectPath: string): Promise<string
   }
 }
 
+/** 路径解开软链后是不是普通文件(断链、指向目录、没权限都算否) */
+async function isRegularFile(filePath: string): Promise<boolean> {
+  try {
+    return (await stat(filePath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 在项目目录下新建一个空的环境文件（如 .env.development）
  * 若文件已存在则不覆盖，返回 created: false
  */
-export async function createEnvFile(projectPath: string, filename: string): Promise<{ created: boolean }> {
+export async function createEnvFile(
+  projectPath: string,
+  filename: string,
+): Promise<{ created: boolean; notAFile?: boolean }> {
   const filePath = join(projectPath, filename);
   if (existsSync(filePath)) {
-    return { created: false };
+    // 同名的是文件夹(或断链)时,只说"已存在"会把用户引到"改个名字"上去,实际得先处理那个东西
+    return { created: false, notAFile: !(await isRegularFile(filePath)) };
   }
   if (!existsSync(projectPath)) {
     await mkdir(projectPath, { recursive: true });
@@ -808,6 +922,11 @@ export async function readEnvFile(
   const { withFingerprint = true } = options;
   if (!existsSync(filePath)) {
     return { content: "", fingerprint: withFingerprint ? computeFingerprint("") : "", exists: false };
+  }
+  // 存在但不是普通文件(叫 .env 的文件夹、断链):如实说清楚,
+  // 否则用户看到的是 "EISDIR: illegal operation on a directory, read" 这种系统错误
+  if (!(await isRegularFile(filePath))) {
+    throw new Error(t("common.notAFile", { file: basename(filePath) }));
   }
   const content = await readFile(filePath, "utf8");
   return {
@@ -890,12 +1009,14 @@ export async function writeEnvFileWithSnapshot(options: {
     const oldContent = await readFile(envFilePath, "utf8");
     const snapshotDir = await projectSnapshotDir(project);
     if (!existsSync(snapshotDir)) {
-      await mkdir(snapshotDir, { recursive: true });
+      await mkdirPrivate(snapshotDir);
     }
 
     const snapshotFilename = generateSnapshotFilename(basename(envFilePath));
     snapshotPath = await uniqueSnapshotPath(snapshotDir, snapshotFilename);
-    await writeFileAtomic(snapshotPath, oldContent);
+    // 快照是新建的文件,不会自动继承源文件权限:用户把 .env 设成 600 了,
+    // 旁边一圈 644 的历史副本(里面连早就删掉的旧密钥都有)等于白设
+    await writeFileAtomic(snapshotPath, oldContent, await modeOf(envFilePath));
 
     // 打完快照后数一下这个项目累计了多少份。超过软上限只是提示用户按需清理,
     // 不自动删除——快照是安全网,自动清理与这个定位相冲突(设计决议 Q12)

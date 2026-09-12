@@ -14,6 +14,8 @@ const zh = {
   "common.save": "保存",
   "common.cancel": "取消",
   "common.delete": "删除",
+  "common.fileSizeBytes": "{size} 字节",
+  "common.notAFile": "「{file}」不是文件（可能是同名文件夹），没法当环境文件读写",
   "common.saveFailedTitle": "保存失败",
   "common.searchPlaceholder": "搜索...",
   "common.showDataDir": "在访达中显示数据目录（换机拷这个目录即可）",
@@ -344,6 +346,7 @@ Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "cf.templateNameError": "{filename} 是模板文件，不作为环境文件管理；要生成模板请用「生成/更新 .env.example」",
   "cf.previewFilename": "将创建：{filename}",
   "cf.alreadyExistsError": "{filename} 已存在，请换一个名称",
+  "cf.nameTakenByNonFile": "{filename} 这个名字被一个文件夹占着（不是文件），先处理它再回来建",
   "cf.submitTitle": "新建环境文件",
   "cf.successToast": "已创建 {filename}",
   "cf.failToast": "创建环境文件失败",
@@ -363,7 +366,8 @@ Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "st.previewIntro":
     "这是 Env Keeper 根据你启用的片段实际生成的文件。**列表里是按类型分组显示的，这里才是真正的执行顺序**——shell 从上往下执行，后面的片段能用到前面定义的变量。",
   "st.previewPathLabel": "文件路径",
-  "st.previewEmpty": "还没有生成内容——可能是一个片段都没有，或者启用的片段都是空的。",
+  "st.previewStale": "⚠️ 磁盘上的文件和这里的预览不一致——可能上次写入没成功，或者文件被人手动改过",
+  "st.syntaxErrorHint": "拼出来的脚本在 {shell} 里语法不通，没有写入",
   "st.previewCopy": "复制整个文件内容",
   "st.orderTooltip": "在 shell.sh 里的排列顺序",
   "st.actionConfigHistory": "查看 Shell 配置历史",
@@ -695,6 +699,9 @@ type DictKey = keyof typeof zh;
 const en: Record<DictKey, string> = {
   "common.save": "Save",
   "common.cancel": "Cancel",
+  "common.fileSizeBytes": "{size} bytes",
+  "common.notAFile":
+    "\"{file}\" isn't a file (it may be a folder of the same name), so it can't be used as an env file",
   "common.delete": "Delete",
   "common.saveFailedTitle": "Save Failed",
   "common.searchPlaceholder": "Search...",
@@ -1034,6 +1041,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
     '{filename} is a template file and is not managed as an env file. Use "Generate/Update .env.example" instead',
   "cf.previewFilename": "Will create {filename}",
   "cf.alreadyExistsError": "{filename} already exists — choose another name",
+  "cf.nameTakenByNonFile": "{filename} is taken by a folder, not a file — deal with that first",
   "cf.submitTitle": "Create Env File",
   "cf.successToast": "Created {filename}",
   "cf.failToast": "Failed to Create Env File",
@@ -1052,7 +1060,9 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.previewIntro":
     "This is the file Env Keeper actually generates from your enabled snippets. **The list groups snippets by type, but this is the real execution order** — the shell runs top to bottom, so later snippets can use what earlier ones define.",
   "st.previewPathLabel": "File path",
-  "st.previewEmpty": "Nothing generated yet — either there are no snippets, or every enabled snippet is empty.",
+  "st.previewStale":
+    "⚠️ The file on disk doesn't match this preview — the last save may have failed, or the file was edited by hand",
+  "st.syntaxErrorHint": "The generated script has a syntax error in {shell} — nothing was written",
   "st.previewCopy": "Copy Whole File",
   "st.orderTooltip": "Position in the generated shell.sh",
   "st.actionConfigHistory": "View Shell Config History",

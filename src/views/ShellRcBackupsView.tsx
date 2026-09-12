@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { maskShellContent } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import {
   backupShellRcTo,
@@ -171,7 +172,7 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
       "",
       `**${t("rcb.infoRecordedAt")}**: \`${prettyTimestamp(item.timestampStr)}\``,
       "",
-      `**${t("rcb.infoFileSize")}**: \`${item.size} bytes\``,
+      `**${t("rcb.infoFileSize")}**: \`${formatFileSize(item.size)}\``,
       "",
       "---",
       "",

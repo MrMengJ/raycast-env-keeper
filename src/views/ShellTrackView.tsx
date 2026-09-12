@@ -19,6 +19,7 @@ import {
   addShellSnippet,
   adjacentInGroupIndex,
   findShellConflicts,
+  generateShellScript,
   groupShellSnippets,
   listShellGroups,
   renameShellGroup,
@@ -481,7 +482,11 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
                     target={<ShellRcBackupsView rcInfo={rcInfo} />}
                   />
                 )}
-                <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+                <Action.Push
+                  title={t("st.actionPreviewScript")}
+                  icon={Icon.Document}
+                  target={<ShellScriptPreview snippets={config.snippets} />}
+                />
                 <Action.Push
                   title={t("st.actionConfigHistory")}
                   icon={Icon.Rewind}
@@ -555,8 +560,8 @@ function snippetTypeLabel(type: ShellSnippet["type"]): string {
   return t("es.typeSnippet");
 }
 
-// 生成文件的预览页:列表按类型分组,看不出真实先后,这里把 shell.sh 原样摊开
-function ShellScriptPreview() {
+// 生成文件的预览页:列表按类型分组,看不出真实先后,这里把 shell.sh 摊开
+function ShellScriptPreview({ snippets }: { snippets: ShellSnippet[] }) {
   const [content, setContent] = useState<string | null>(null);
   // 预览页展示的是完整的 shell.sh,里面同样可能有密钥,默认打码
   const [reveal, setReveal] = useState(false);
@@ -566,22 +571,28 @@ function ShellScriptPreview() {
     readShellScript().then(setContent);
   }, []);
 
+  // 按片段分别打码,用的是生成逻辑本身(不是"读文件再统一打码"):
+  // 前者才认得出哪个片段被勾了"整段敏感"——此前整份预览统一打码,那个勾在这里等于没生效
+  const visibleScript = generateShellScript(snippets, {
+    transformContent: (snippet, text) => (reveal ? text : maskShellContent(text, { maskAll: snippet.containsSecret })),
+  });
+  // 磁盘上的文件跟"拿现在这份配置生成出来的"不一样:上次写盘没成功,或者有人手改过。如实说
+  const stale = content !== null && content.trim() !== "" && content !== visibleScript;
+
   let markdown = "";
   if (content !== null) {
-    markdown =
-      content.trim() === ""
-        ? t("st.previewEmpty")
-        : [
-            t("st.previewIntro"),
-            "",
-            `**${t("st.previewPathLabel")}**: \`${scriptPath}\``,
-            "",
-            "---",
-            "",
-            "```bash",
-            reveal ? content : maskShellContent(content),
-            "```",
-          ].join("\n");
+    markdown = [
+      t("st.previewIntro"),
+      "",
+      `**${t("st.previewPathLabel")}**: \`${scriptPath}\``,
+      ...(stale ? ["", t("st.previewStale")] : []),
+      "",
+      "---",
+      "",
+      "```bash",
+      visibleScript,
+      "```",
+    ].join("\n");
   }
 
   return (
@@ -590,14 +601,14 @@ function ShellScriptPreview() {
       navigationTitle={t("st.previewTitle")}
       markdown={markdown}
       actions={
-        content ? (
+        content !== null ? (
           <ActionPanel>
             <Action
               title={reveal ? t("st.actionHideSecrets") : t("st.actionRevealSecrets")}
               icon={reveal ? Icon.EyeDisabled : Icon.Eye}
               onAction={() => setReveal((v) => !v)}
             />
-            <Action.CopyToClipboard title={t("st.previewCopy")} content={content} concealed />
+            <Action.CopyToClipboard title={t("st.previewCopy")} content={visibleScript} concealed />
           </ActionPanel>
         ) : undefined
       }
@@ -859,7 +870,11 @@ function SnippetListItem({
               icon={Icon.Rewind}
               target={<ShellConfigHistoryView currentConfig={currentConfig} onRestored={onRestored} />}
             />
-            <Action.Push title={t("st.actionPreviewScript")} icon={Icon.Document} target={<ShellScriptPreview />} />
+            <Action.Push
+              title={t("st.actionPreviewScript")}
+              icon={Icon.Document}
+              target={<ShellScriptPreview snippets={currentConfig.snippets} />}
+            />
           </ActionPanel.Section>
           <ActionPanel.Section title={t("st.sectionCopy")}>
             <Action.CopyToClipboard title={t("st.actionCopyContent")} content={item.content} concealed />

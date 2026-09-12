@@ -9,6 +9,7 @@ import {
   type ShellSnippet,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import {
   type ConfigSnapshotItem,
@@ -232,7 +233,7 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
       "",
       `**${t("sch.infoSnippetCount")}**: \`${snapshot.snippets.length}\``,
       "",
-      `**${t("sch.infoFileSize")}**: \`${item.size} bytes\``,
+      `**${t("sch.infoFileSize")}**: \`${formatFileSize(item.size)}\``,
     ];
 
     if (focusSnippet) {

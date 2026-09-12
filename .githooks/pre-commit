@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# 提交前跑一遍 check(typecheck + lint + build),约 5 秒。
+# 提交前跑一遍 check(core check + typecheck + lint + test + build),约半分钟。
 #
 # 为什么非要有这一步:`ray build` 用 esbuild,只转译不检查类型;
 # `ray lint` 里的 typescript-eslint 也只做单文件语法层规则。
@@ -17,7 +17,7 @@ if [ ! -d node_modules ]; then
   exit 0
 fi
 
-echo "→ 提交前检查(typecheck + lint + build)…"
+echo "→ 提交前检查(core + 类型 + lint + 测试 + 构建)…"
 if ! npm run check --silent; then
   echo ""
   echo "❌ 检查没通过,提交已中止。"
