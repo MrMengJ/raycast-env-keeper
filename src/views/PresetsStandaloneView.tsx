@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { useEffect, useState } from "react";
 import type { Preset, ProjectMeta } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { applyPresetToFile } from "../services/presetApply.js";
 import { readEnvFile } from "../services/storage.js";
 import { PresetsView } from "./PresetsView.js";
@@ -24,11 +25,7 @@ export function PresetsStandaloneView({ project, presetId }: { project: ProjectM
     } catch (e) {
       // 目录不在了之类:方案页照样能开,只是没有"当前生效"可标
       setContent("");
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("jt.loadFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("jt.loadFailedTitle"), e);
     }
   };
 
@@ -46,11 +43,7 @@ export function PresetsStandaloneView({ project, presetId }: { project: ProjectM
         message: snapshotLimitHint(result),
       });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("ps.applyFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("ps.applyFailedTitle"), e);
     }
   };
 

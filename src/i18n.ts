@@ -202,6 +202,7 @@ Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "ps.groupFilterAll": "全部分组",
   "ps.appliedToast": "已把「{name}」套用到 {file}",
   "ps.applyFailedTitle": "套用失败",
+  "ps.loadFailedTitle": "读取方案失败",
   "ps.savedToast": "已存为「{name}」",
   "ps.updatedToast": "已更新「{name}」",
   "ps.deleteConfirmTitle": "删除方案「{name}」？",
@@ -283,6 +284,7 @@ Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "psh.restoreConfirmAction": "恢复",
   "psh.restoredToast": "已恢复方案",
   "psh.restoreFailedTitle": "恢复失败",
+  "psh.loadFailedTitle": "读取方案历史失败",
   "psh.unreadable": "这份记录读不出来",
   "psh.emptyTitle": "还没有历史记录",
   "psh.emptyDesc": "本项目的方案每次改动前都会自动记一份",
@@ -412,6 +414,7 @@ Env Keeper 编辑的是磁盘上的 .env 文件本身，但你**终端里实际�
   "sch.restoreConfirmAction": "恢复",
   "sch.restoredToast": "已恢复，开一个新终端窗口即可生效",
   "sch.restoreFailedTitle": "恢复失败",
+  "sch.loadFailedTitle": "读取配置历史失败",
   "sch.deleteConfirmTitle": "删除这份历史记录？",
   "sch.deleteConfirmMessage": "只会删掉 {filename} 这一份记录，不影响你当前的 Shell 配置。",
   "sch.deletedToast": "已删除这份记录",
@@ -582,6 +585,7 @@ Env Keeper 每次打开都会检测 {file} 里有没有这一行——检测到�
   "sh.restoreConfirmAction": "立即恢复",
   "sh.restoredToast": "已恢复到该快照",
   "sh.restoreFailedTitle": "恢复失败",
+  "sh.loadFailedTitle": "读取快照失败",
   "sh.restoreErrorTitle": "恢复时出错",
   "sh.deleteConfirmTitle": "删除快照",
   "sh.deleteConfirmMessage": "确定要永久删除快照 {filename} 吗？",
@@ -682,6 +686,7 @@ Env Keeper 每次打开都会检测 {file} 里有没有这一行——检测到�
   "rcb.backupSubmit": "备份",
   "rcb.backedUpToast": "已备份",
   "rcb.backupFailedTitle": "备份失败",
+  "rcb.loadFailedTitle": "读取备份列表失败",
   "rcb.restoreConfirmTitle": "用 {time} 的备份覆盖当前配置？",
   "rcb.restoreConfirmMessage":
     "{file} 会被这份备份整个覆盖。覆盖之前会先把现在的内容再存一份，所以这一步也能撤回。新开一个终端窗口后生效。",
@@ -694,7 +699,7 @@ Env Keeper 每次打开都会检测 {file} 里有没有这一行——检测到�
   "rcb.deletedToast": "已删除这份备份",
 } as const;
 
-type DictKey = keyof typeof zh;
+export type DictKey = keyof typeof zh;
 
 const en: Record<DictKey, string> = {
   "common.save": "Save",
@@ -895,6 +900,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ps.groupFilterAll": "All groups",
   "ps.appliedToast": "Applied “{name}” to {file}",
   "ps.applyFailedTitle": "Apply Failed",
+  "ps.loadFailedTitle": "Failed to Load Presets",
   "ps.savedToast": "Saved as “{name}”",
   "ps.updatedToast": "Updated “{name}”",
   "ps.deleteConfirmTitle": "Delete profile “{name}”?",
@@ -977,6 +983,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "psh.restoreConfirmAction": "Restore",
   "psh.restoredToast": "Profiles restored",
   "psh.restoreFailedTitle": "Restore Failed",
+  "psh.loadFailedTitle": "Failed to Load Preset History",
   "psh.unreadable": "This record cannot be read",
   "psh.emptyTitle": "No History Yet",
   "psh.emptyDesc": "A record is kept automatically before every change to this project's profiles",
@@ -1107,6 +1114,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "sch.restoreConfirmAction": "Restore",
   "sch.restoredToast": "Restored — open a new terminal window for it to take effect",
   "sch.restoreFailedTitle": "Restore Failed",
+  "sch.loadFailedTitle": "Failed to Load Config History",
   "sch.deleteConfirmTitle": "Delete this history entry?",
   "sch.deleteConfirmMessage": "Only the entry {filename} is deleted; your current Shell config is untouched.",
   "sch.deletedToast": "History entry deleted",
@@ -1280,6 +1288,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "sh.restoreConfirmAction": "Restore Now",
   "sh.restoredToast": "Snapshot restored successfully",
   "sh.restoreFailedTitle": "Restore Failed",
+  "sh.loadFailedTitle": "Failed to Load Snapshots",
   "sh.restoreErrorTitle": "Restore Error",
   "sh.deleteConfirmTitle": "Delete Snapshot",
   "sh.deleteConfirmMessage": "Are you sure you want to permanently delete snapshot {filename}?",
@@ -1382,6 +1391,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "rcb.backupSubmit": "Back Up",
   "rcb.backedUpToast": "Backed up",
   "rcb.backupFailedTitle": "Backup Failed",
+  "rcb.loadFailedTitle": "Failed to Load Backups",
   "rcb.restoreConfirmTitle": "Overwrite with the backup from {time}?",
   "rcb.restoreConfirmMessage":
     "{file} will be replaced entirely by this backup. The current content is saved as another backup first, so this step is reversible too. Open a new terminal window for it to take effect.",

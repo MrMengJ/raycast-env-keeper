@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Color, Icon, List, showToast, Toast } from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
 import { join } from "node:path";
 import { useEffect, useState } from "react";
 import {
@@ -13,6 +13,7 @@ import {
   type ProjectMeta,
 } from "@env-butler/core";
 import { t } from "./i18n.js";
+import { showFailureToast } from "./views/failureToast.js";
 import { detectProjectEnvFiles, loadPresets, loadRegistry, loadShellConfig, readEnvFile } from "./services/storage.js";
 import { ProjectDetailView } from "./views/ProjectDetailView.js";
 import { ShellTrackView } from "./views/ShellTrackView.js";
@@ -136,11 +137,7 @@ export default function Command() {
 
         setAllVars([...perProject.flat(), ...shellVars, ...presetVars]);
       } catch (e) {
-        await showToast({
-          style: Toast.Style.Failure,
-          title: t("search.loadFailedTitle"),
-          message: e instanceof Error ? e.message : String(e),
-        });
+        await showFailureToast(t("search.loadFailedTitle"), e);
       } finally {
         setLoading(false);
       }

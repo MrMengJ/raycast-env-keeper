@@ -2,6 +2,7 @@ import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@ray
 import { useState } from "react";
 import { relocateProject, type ProjectMeta } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { loadRegistry, saveRegistry } from "../services/storage.js";
 
 /**
@@ -28,11 +29,7 @@ export function RelocateProjectForm({ project, onDone }: { project: ProjectMeta;
       onDone();
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

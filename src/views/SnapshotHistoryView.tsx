@@ -1,4 +1,4 @@
-import { Action, ActionPanel, Alert, confirmAlert, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { readFile } from "node:fs/promises";
 import { useEffect, useState } from "react";
 import {
@@ -10,6 +10,9 @@ import {
   type ProjectMeta,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
+import { runLoad } from "./loadState.js";
 import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import { deleteSnapshot, listSnapshots, restoreSnapshot, type SnapshotItem } from "../services/storage.js";
@@ -66,25 +69,25 @@ export function SnapshotHistoryView({
   };
 
   /** 重新读列表。选中项已经不在列表里(刚被删掉)时,右侧不能还停在它上面,重选第一份 */
-  const refreshSnapshots = async (current: SnapshotItem | null = selectedSnapshot) => {
-    setLoading(true);
-    try {
-      const items = await listSnapshots(project, envFilename);
-      setSnapshots(items);
-      const stillThere = current && items.some((s) => s.filename === current.filename);
-      const first = items[0];
-      if (!stillThere) {
-        if (first) await loadPreview(items, first);
-        else {
-          setSelectedSnapshot(null);
-          setPreviewContent("");
-          setPrevContent(null);
+  const refreshSnapshots = (current: SnapshotItem | null = selectedSnapshot) =>
+    runLoad(
+      setLoading,
+      async () => {
+        const items = await listSnapshots(project, envFilename);
+        setSnapshots(items);
+        const stillThere = current && items.some((s) => s.filename === current.filename);
+        const first = items[0];
+        if (!stillThere) {
+          if (first) await loadPreview(items, first);
+          else {
+            setSelectedSnapshot(null);
+            setPreviewContent("");
+            setPrevContent(null);
+          }
         }
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+      },
+      "sh.loadFailedTitle",
+    );
 
   useEffect(() => {
     refreshSnapshots();
@@ -96,16 +99,10 @@ export function SnapshotHistoryView({
   };
 
   const handleRestore = async (item: SnapshotItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("sh.restoreConfirmTitle", { timestamp: prettyTimestamp(item.timestampStr) }),
       message: t("sh.restoreConfirmMessage", { file: envFilename }),
-      primaryAction: {
-        title: t("sh.restoreConfirmAction"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("sh.restoreConfirmAction"),
     });
 
     if (!confirmed) return;
@@ -129,25 +126,15 @@ export function SnapshotHistoryView({
         await showToast({ style: Toast.Style.Failure, title: t("sh.restoreFailedTitle"), message: result.error });
       }
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("sh.restoreErrorTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("sh.restoreErrorTitle"), e);
     }
   };
 
   const handleDelete = async (item: SnapshotItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("sh.deleteConfirmTitle"),
       message: t("sh.deleteConfirmMessage", { filename: item.filename }),
-      primaryAction: {
-        title: t("common.delete"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
 
@@ -225,7 +212,11 @@ export function SnapshotHistoryView({
             id={item.filename}
             icon={Icon.Clock}
             title={prettyTimestamp(item.timestampStr)}
-            detail={<List.Item.Detail markdown={buildMarkdown(item)} />}
+            // 只算选中项:此前每行都跑一遍 buildMarkdown(内含 4 次解析 + 2 次 diff),
+            // 快照一多,滚动就卡。跟 Shell 配置历史页同一个写法
+            detail={
+              <List.Item.Detail markdown={selectedSnapshot?.filename === item.filename ? buildMarkdown(item) : ""} />
+            }
             actions={
               <ActionPanel>
                 <Action title={t("sh.actionRestore")} icon={Icon.Undo} onAction={() => handleRestore(item)} />

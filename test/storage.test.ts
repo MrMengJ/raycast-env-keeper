@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ShellConfig } from "@env-butler/core";
 import { createEmptyShellConfig } from "@env-butler/core";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // storage 在模块加载的那一刻就把数据目录算成 $HOME/.env-butler,所以必须先换掉 HOME 再导入
 const home = await mkdtemp(join(tmpdir(), "env-keeper-test-"));
@@ -186,6 +186,34 @@ describe("#53 快照继承源文件权限", () => {
     expect(result.snapshotPath).toBeTruthy();
     expect(await modeOf(result.snapshotPath as string)).toBe(0o600);
     expect(await readFile(result.snapshotPath as string, "utf8")).toBe("SECRET=old");
+  });
+
+  it("同一秒内连写三次:三份快照都在,没有被互相覆盖", async () => {
+    // 快照名只精确到秒,同一秒里的第二次会撞名。这条文档里点名栽过两回
+    // (「手动存一份 → 立刻恢复」正好落在同一秒),所以把时间冻住,逼出撞名那条路径
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const dir = await mkdtemp(join(home, "proj-samesec-"));
+      const envPath = join(dir, ".env");
+      const project = { id: "p_samesec", name: "same-second" };
+      await writeFile(envPath, "SECRET=v1", { mode: 0o600 });
+
+      const paths: string[] = [];
+      for (const next of ["SECRET=v2", "SECRET=v3", "SECRET=v4"]) {
+        const result = await storage.writeEnvFileWithSnapshot({ project, envFilePath: envPath, newContent: next });
+        paths.push(result.snapshotPath as string);
+      }
+
+      expect(new Set(paths).size).toBe(3);
+      // 每一份存的是"写之前那一版",一份都没被后来者盖掉
+      expect(await Promise.all(paths.map((p) => readFile(p, "utf8")))).toEqual([
+        "SECRET=v1",
+        "SECRET=v2",
+        "SECRET=v3",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -1,16 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  Color,
-  confirmAlert,
-  Icon,
-  Keyboard,
-  List,
-  LocalStorage,
-  showToast,
-  Toast,
-} from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List, LocalStorage, showToast, Toast } from "@raycast/api";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { useEffect, useState } from "react";
@@ -23,6 +11,8 @@ import {
   touchProject,
 } from "@env-butler/core";
 import { t } from "./i18n.js";
+import { confirmDestructive } from "./views/confirmDestructive.js";
+import { showFailureToast } from "./views/failureToast.js";
 import {
   type ConfigLoadProblem,
   detectProjectEnvFiles,
@@ -90,11 +80,7 @@ export default function Command() {
       setEnvCounts(counts);
       setMissingPaths(missing);
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("mv.loadRegistryFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("mv.loadRegistryFailedTitle"), e);
     } finally {
       setLoading(false);
     }
@@ -115,16 +101,10 @@ export default function Command() {
   };
 
   const handleRemoveProject = async (p: ProjectMeta) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("mv.removeConfirmTitle", { name: p.name }),
       message: t("mv.removeConfirmMessage"),
-      primaryAction: {
-        title: t("mv.removeConfirmAction"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("mv.removeConfirmAction"),
     });
 
     if (!confirmed) return;
@@ -143,11 +123,7 @@ export default function Command() {
       await refreshProjects();
       await showToast({ style: Toast.Style.Success, title: t("mv.removedToastTitle", { name: p.name }) });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

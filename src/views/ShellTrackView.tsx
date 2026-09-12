@@ -1,16 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  Color,
-  confirmAlert,
-  Detail,
-  Icon,
-  Keyboard,
-  List,
-  showToast,
-  Toast,
-} from "@raycast/api";
+import { Action, ActionPanel, Color, confirmAlert, Detail, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
 import { useEffect, useState } from "react";
 import {
   type ShellConfig,
@@ -31,6 +19,8 @@ import {
   updateShellSnippet,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
 import type { ValidatableShell } from "../services/shellValidator.js";
 import {
   appendShellSourceLine,
@@ -82,11 +72,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       setConfigProblem(loaded.problem);
       setRcInfo(rc);
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("st.loadFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("st.loadFailedTitle"), e);
     } finally {
       setLoading(false);
     }
@@ -120,26 +106,16 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       });
       await refreshConfig();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("st.enableFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("st.enableFailedTitle"), e);
     }
   };
 
   // 禁用 Shell 集成:与启用对称,从配置文件里干净移除那一行(先确认,防止手误)
   const handleDisableIntegration = async (rc: ShellRcInfo, sourceLine: string) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("st.disableConfirmTitle"),
       message: t("st.disableConfirmMessage", { file: rc.rcLabel, sourceLine }),
-      primaryAction: {
-        title: t("st.disableConfirmAction"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("st.disableConfirmAction"),
     });
     if (!confirmed) return;
 
@@ -164,11 +140,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
       });
       await refreshConfig();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("st.disableFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("st.disableFailedTitle"), e);
     }
   };
 
@@ -217,11 +189,7 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     try {
       await action();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 
@@ -284,11 +252,10 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
 
   const handleDissolveGroup = async (group: string) => {
     const count = config.snippets.filter((s) => s.group === group).length;
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("grp.dissolveTitle", { group }),
       message: t("grp.dissolveMessage", { count }),
-      primaryAction: { title: t("grp.dissolveConfirm"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("grp.dissolveConfirm"),
     });
     if (!confirmed) return;
     await run(() =>
@@ -317,16 +284,10 @@ export function ShellTrackView({ searchBarAccessory, initialSelectedId }: ShellT
     );
 
   const handleDelete = async (item: ShellSnippet) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("st.deleteConfirmTitle", { name: item.name }),
       message: t("st.deleteConfirmMessage"),
-      primaryAction: {
-        title: t("common.delete"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
 
@@ -568,7 +529,13 @@ function ShellScriptPreview({ snippets }: { snippets: ShellSnippet[] }) {
   const scriptPath = getShellScriptPath();
 
   useEffect(() => {
-    readShellScript().then(setContent);
+    // 读不出来也要把加载态收掉(content 设成空串),否则这个页面会一直转圈
+    readShellScript()
+      .then(setContent)
+      .catch(async (e) => {
+        setContent("");
+        await showFailureToast(t("st.loadFailedTitle"), e);
+      });
   }, []);
 
   // 按片段分别打码,用的是生成逻辑本身(不是"读文件再统一打码"):

@@ -2,6 +2,7 @@ import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@ray
 import { useState } from "react";
 import { type ProjectMeta, renameProject } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { loadRegistry, saveRegistry } from "../services/storage.js";
 
 /** 改项目的显示名。只改注册表,不动磁盘上的文件夹 */
@@ -28,11 +29,7 @@ export function RenameProjectForm({ project, onDone }: { project: ProjectMeta; o
       onDone();
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

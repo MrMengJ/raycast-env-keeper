@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import { useState } from "react";
 import { addProject, type ProjectMeta } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { loadRegistry, saveRegistry } from "../services/storage.js";
 
 interface AddProjectFormProps {
@@ -44,11 +45,7 @@ export function AddProjectForm({ onProjectAdded }: AddProjectFormProps) {
       onProjectAdded(project);
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("addProject.failToast"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("addProject.failToast"), e);
     }
   };
 

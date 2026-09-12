@@ -1,16 +1,4 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  Color,
-  confirmAlert,
-  Icon,
-  Keyboard,
-  List,
-  showToast,
-  Toast,
-  useNavigation,
-} from "@raycast/api";
+import { Action, ActionPanel, Color, Icon, Keyboard, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { useEffect, useState } from "react";
 import {
   createEmptyPresetsFile,
@@ -28,6 +16,8 @@ import {
 } from "@env-butler/core";
 import type { PresetMetaData } from "./PresetMetaForm.js";
 import { t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { runLoad } from "./loadState.js";
 import { type ConfigLoadProblem, loadPresets, savePresets } from "../services/storage.js";
 import { ConfigProblemItem } from "./ConfigProblemItem.js";
 import { PresetContentForm } from "./PresetContentForm.js";
@@ -75,13 +65,16 @@ export function PresetsView({
   const [problem, setProblem] = useState<ConfigLoadProblem | undefined>();
   const [loading, setLoading] = useState(true);
 
-  const refresh = async () => {
-    setLoading(true);
-    const result = await loadPresets();
-    setFile(result.data);
-    setProblem(result.problem);
-    setLoading(false);
-  };
+  const refresh = () =>
+    runLoad(
+      setLoading,
+      async () => {
+        const result = await loadPresets();
+        setFile(result.data);
+        setProblem(result.problem);
+      },
+      "ps.loadFailedTitle",
+    );
 
   useEffect(() => {
     refresh();
@@ -112,11 +105,10 @@ export function PresetsView({
   };
 
   const handleDissolveGroup = async (group: string) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("grp.dissolveTitle", { group }),
       message: t("grp.dissolveMessage", { count: groupSize(group) }),
-      primaryAction: { title: t("grp.dissolveConfirm"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("grp.dissolveConfirm"),
     });
     if (!confirmed) return;
     await persistGroupChange(renamePresetGroup(file, projectId, group, undefined), group);
@@ -183,11 +175,10 @@ export function PresetsView({
   );
 
   const handleDelete = async (preset: Preset) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("ps.deleteConfirmTitle", { name: preset.name }),
       message: t("ps.deleteConfirmMessage"),
-      primaryAction: { title: t("common.delete"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
     await persist(removePreset(file, preset.id));

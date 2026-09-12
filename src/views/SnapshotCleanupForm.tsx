@@ -1,6 +1,8 @@
-import { Action, ActionPanel, Alert, confirmAlert, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import { t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
 
 const KEEP_OPTIONS = [50, 20, 10, 5, 0];
 
@@ -48,11 +50,10 @@ export function SnapshotCleanupForm({
       return;
     }
 
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("sh.cleanupConfirmTitle", { count: toDelete.length, unit }),
       message: t("sh.cleanupConfirmMessage", { kept: snapshots.length - toDelete.length }),
-      primaryAction: { title: t("common.delete"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
 
@@ -67,11 +68,7 @@ export function SnapshotCleanupForm({
       }
     } catch (e) {
       setBusy(false);
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("sh.cleanupFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("sh.cleanupFailedTitle"), e);
       onCleaned();
       return;
     }

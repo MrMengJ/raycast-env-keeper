@@ -1,7 +1,8 @@
-import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import type { Preset } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { formatEnvContentMasked } from "./diffFormat.js";
 import { useGroupFields } from "./GroupFields.js";
 
@@ -70,11 +71,7 @@ export function PresetMetaForm({
       });
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

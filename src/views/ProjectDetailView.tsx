@@ -49,6 +49,8 @@ import {
   updatePreset,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
 import {
   type ConfigLoadProblem,
   checkEnvrcExists,
@@ -125,28 +127,31 @@ export function ProjectDetailView({
   const refreshEnvFiles = async () => {
     const files = await detectProjectEnvFiles(currentProject.path);
     setEnvFiles(files);
-    if (!files.includes(selectedEnvFile)) {
-      setSelectedEnvFile(files[0] ?? ".env");
-    }
+    // 用函数式更新:这里被 effect 和好几个动作调用,直接读 selectedEnvFile 读到的是闭包里的旧值,
+    // 刚新建/切换过的文件会被它判成"不在列表里"又弹回第一个
+    setSelectedEnvFile((prev) => (files.includes(prev) ? prev : (files[0] ?? ".env")));
     const envrc = (await checkEnvrcExists(currentProject.path)) && !currentProject.dismissedEnvrcNotice;
     setHasEnvrc(envrc);
   };
 
-  // 读取当前选中的环境文件
-  const loadCurrentEnvContent = async () => {
+  /**
+   * 读取当前选中的环境文件。
+   * `isStale` 给 effect 用:切文件切得快时,先发的那次读可能后回来,把新文件的内容盖掉,
+   * 而指纹跟着错位之后,下一次保存会误报或漏报"文件被外部改过"
+   */
+  const loadCurrentEnvContent = async (isStale: () => boolean = () => false) => {
     setLoading(true);
     try {
       const { content, fingerprint } = await readEnvFile(currentEnvFilePath);
+      if (isStale()) return;
       setLines(parseEnv(content));
       setCurrentFingerprint(fingerprint);
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("pd.readFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      if (isStale()) return;
+      await showFailureToast(t("pd.readFailedTitle"), e);
     } finally {
-      setLoading(false);
+      // 过期的那次不碰加载态:它已经不负责这个页面了
+      if (!isStale()) setLoading(false);
     }
   };
 
@@ -156,9 +161,12 @@ export function ProjectDetailView({
   }, [currentProject.path]);
 
   useEffect(() => {
-    if (selectedEnvFile) {
-      loadCurrentEnvContent();
-    }
+    if (!selectedEnvFile) return;
+    let cancelled = false;
+    loadCurrentEnvContent(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [selectedEnvFile, currentProject.path]);
 
   useEffect(() => {
@@ -250,11 +258,10 @@ export function ProjectDetailView({
   const handleSaveVariable = async (data: VariableFormData, at?: number) => {
     // 新建撞上已有名字:此前静默覆盖旧值,只提示"已保存"
     if (at === undefined && findEnvLineIndex(lines, data.key) >= 0) {
-      const confirmed = await confirmAlert({
+      const confirmed = await confirmDestructive({
         title: t("pd.overwriteConfirmTitle", { key: data.key }),
         message: t("pd.overwriteConfirmMessage", { file: selectedEnvFile }),
-        primaryAction: { title: t("pd.overwriteConfirmAction"), style: Alert.ActionStyle.Destructive },
-        dismissAction: { title: t("common.cancel") },
+        actionTitle: t("pd.overwriteConfirmAction"),
       });
       if (!confirmed) throw new Error(t("pd.overwriteCancelled"));
     }
@@ -305,16 +312,10 @@ export function ProjectDetailView({
 
   // 删除某一行
   const handleDeleteVariable = async (at: number, key: string) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("pd.deleteConfirmTitle", { key }),
       message: t("pd.deleteConfirmMessage", { file: selectedEnvFile, key }),
-      primaryAction: {
-        title: t("common.delete"),
-        style: Alert.ActionStyle.Destructive,
-      },
-      dismissAction: {
-        title: t("common.cancel"),
-      },
+      actionTitle: t("common.delete"),
     });
 
     if (!confirmed) return;
@@ -382,16 +383,10 @@ export function ProjectDetailView({
     // 但"按一下就把一整个文件换掉"不该在用户毫无察觉的情况下发生。
     // 这里直接查磁盘而不是查 envFiles 状态:文件可能在界面打开期间被外部创建
     if (existsSync(targetPath)) {
-      const confirmed = await confirmAlert({
+      const confirmed = await confirmDestructive({
         title: t("pd.copyOverwriteConfirmTitle"),
         message: t("pd.copyOverwriteConfirmMessage", { file: selectedEnvFile }),
-        primaryAction: {
-          title: t("pd.copyOverwriteConfirmAction"),
-          style: Alert.ActionStyle.Destructive,
-        },
-        dismissAction: {
-          title: t("common.cancel"),
-        },
+        actionTitle: t("pd.copyOverwriteConfirmAction"),
       });
       if (!confirmed) return;
     }
@@ -435,11 +430,7 @@ export function ProjectDetailView({
         message: snapshotLimitHint(result),
       });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("pd.fillFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("pd.fillFailedTitle"), e);
     }
   };
 
@@ -475,11 +466,7 @@ export function ProjectDetailView({
         message: snapshotLimitHint(result),
       });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("ps.applyFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("ps.applyFailedTitle"), e);
     }
   };
 
@@ -541,11 +528,7 @@ export function ProjectDetailView({
       await persistPresets(updatePreset(presetsFile, preset.id, { content: currentContent }));
       await showToast({ style: Toast.Style.Success, title: t("ps.updatedToast", { name: preset.name }) });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 
@@ -554,11 +537,7 @@ export function ProjectDetailView({
       await persistPresets(clearPresetApplied(presetsFile, currentProject.id, selectedEnvFile));
       await showToast({ style: Toast.Style.Success, title: t("ps.driftDismissedToast") });
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

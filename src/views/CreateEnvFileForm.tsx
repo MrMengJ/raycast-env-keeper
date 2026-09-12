@@ -2,6 +2,7 @@ import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@ray
 import { useState } from "react";
 import { ENV_TEMPLATE_FILENAMES, isValidEnvFilename } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { createEnvFile } from "../services/storage.js";
 
 interface CreateEnvFileFormProps {
@@ -54,11 +55,7 @@ export function CreateEnvFileForm({ projectPath, onCreated }: CreateEnvFileFormP
       onCreated(targetFilename);
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("cf.failToast"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("cf.failToast"), e);
     }
   };
 

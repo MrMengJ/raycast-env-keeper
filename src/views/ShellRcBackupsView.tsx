@@ -1,18 +1,10 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  confirmAlert,
-  Form,
-  Icon,
-  List,
-  showToast,
-  Toast,
-  useNavigation,
-} from "@raycast/api";
+import { Action, ActionPanel, Form, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { useEffect, useState } from "react";
 import { maskShellContent } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
+import { runLoad } from "./loadState.js";
 import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import {
@@ -40,11 +32,7 @@ function BackupToForm({ rcInfo, onDone }: { rcInfo: ShellRcInfo; onDone: () => v
       onDone();
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("rcb.backupFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("rcb.backupFailedTitle"), e);
     }
   };
 
@@ -90,11 +78,14 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
   // .zshrc 里同样可能写着密钥,默认打码,跟 Shell 轨的行为一致
   const [reveal, setReveal] = useState(false);
 
-  const refresh = async () => {
-    setLoading(true);
-    setItems(await listShellRcBackups());
-    setLoading(false);
-  };
+  const refresh = () =>
+    runLoad(
+      setLoading,
+      async () => {
+        setItems(await listShellRcBackups());
+      },
+      "rcb.loadFailedTitle",
+    );
 
   useEffect(() => {
     refresh();
@@ -117,20 +108,15 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
       await showToast({ style: Toast.Style.Success, title: t("rcb.backedUpToast"), message: path });
       await refresh();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("rcb.backupFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("rcb.backupFailedTitle"), e);
     }
   };
 
   const handleRestore = async (item: RcBackupItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("rcb.restoreConfirmTitle", { time: prettyTimestamp(item.timestampStr) }),
       message: t("rcb.restoreConfirmMessage", { file: rcInfo.rcLabel }),
-      primaryAction: { title: t("rcb.restoreConfirmAction"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("rcb.restoreConfirmAction"),
     });
     if (!confirmed) return;
 
@@ -143,20 +129,15 @@ export function ShellRcBackupsView({ rcInfo }: { rcInfo: ShellRcInfo }) {
       });
       await refresh();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("rcb.restoreFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("rcb.restoreFailedTitle"), e);
     }
   };
 
   const handleDelete = async (item: RcBackupItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("rcb.deleteConfirmTitle"),
       message: t("rcb.deleteConfirmMessage", { filename: item.filename }),
-      primaryAction: { title: t("common.delete"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
     await deleteShellRcBackup(item.filePath);

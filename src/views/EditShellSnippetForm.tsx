@@ -8,6 +8,7 @@ import {
   type ShellSnippetType,
 } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 import { isKnownCommand, validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";
 import { useGroupFields } from "./GroupFields.js";
 
@@ -125,11 +126,7 @@ export function EditShellSnippetForm({ initialData, shellKind, existingGroups, o
       });
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

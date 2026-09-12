@@ -11,6 +11,7 @@ import {
   toggleShellSnippet,
 } from "@env-butler/core";
 import { t } from "./i18n.js";
+import { showFailureToast } from "./views/failureToast.js";
 import {
   detectProjectEnvFiles,
   detectShellRc,
@@ -68,11 +69,7 @@ export default function Command() {
         ),
       );
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("jt.loadFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("jt.loadFailedTitle"), e);
     } finally {
       setLoading(false);
     }
@@ -87,11 +84,7 @@ export default function Command() {
     try {
       await toggleSnippet(id);
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 

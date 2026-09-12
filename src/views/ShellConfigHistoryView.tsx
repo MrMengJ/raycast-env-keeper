@@ -9,6 +9,9 @@ import {
   type ShellSnippet,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
+import { runLoad } from "./loadState.js";
 import { formatFileSize } from "./fileSize.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import {
@@ -51,26 +54,29 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
   /** 只在"看单个片段"时用:要判断哪几版动过这个片段,必须把每一版都读出来 */
   const [allContents, setAllContents] = useState<Map<string, string>>(new Map());
 
-  const refresh = async () => {
-    setLoading(true);
-    const list = await listConfigSnapshots("shell");
-    setItems(list);
+  const refresh = () =>
+    runLoad(
+      setLoading,
+      async () => {
+        const list = await listConfigSnapshots("shell");
+        setItems(list);
 
-    if (focusSnippet) {
-      const map = new Map<string, string>();
-      await Promise.all(
-        list.map(async (i) => {
-          try {
-            map.set(i.filename, await readConfigSnapshot(i.filePath));
-          } catch {
-            // 单份读不出来不影响其他版本
-          }
-        }),
-      );
-      setAllContents(map);
-    }
-    setLoading(false);
-  };
+        if (focusSnippet) {
+          const map = new Map<string, string>();
+          await Promise.all(
+            list.map(async (i) => {
+              try {
+                map.set(i.filename, await readConfigSnapshot(i.filePath));
+              } catch {
+                // 单份读不出来不影响其他版本
+              }
+            }),
+          );
+          setAllContents(map);
+        }
+      },
+      "sch.loadFailedTitle",
+    );
 
   useEffect(() => {
     refresh();
@@ -181,20 +187,15 @@ export function ShellConfigHistoryView({ currentConfig, onRestored, focusSnippet
       onRestored();
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("sch.restoreFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("sch.restoreFailedTitle"), e);
     }
   };
 
   const handleDelete = async (item: ConfigSnapshotItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("sch.deleteConfirmTitle"),
       message: t("sch.deleteConfirmMessage", { filename: item.filename }),
-      primaryAction: { title: t("common.delete"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
 

@@ -14,6 +14,9 @@ import {
   restoreProjectPresets,
 } from "@env-butler/core";
 import { snapshotLimitHint, t } from "../i18n.js";
+import { confirmDestructive } from "./confirmDestructive.js";
+import { showFailureToast } from "./failureToast.js";
+import { runLoad } from "./loadState.js";
 import { prettyTimestamp } from "./timeFormat.js";
 import {
   type ConfigSnapshotItem,
@@ -71,25 +74,28 @@ export function PresetsHistoryView({
   const [allContents, setAllContents] = useState<Map<string, string>>(new Map());
   const [currentFile, setCurrentFile] = useState<PresetsFile | null>(null);
 
-  const refresh = async () => {
-    setLoading(true);
-    const list = await listConfigSnapshots("presets");
-    setItems(list);
-    const map = new Map<string, string>();
-    await Promise.all(
-      list.map(async (i) => {
-        try {
-          map.set(i.filename, await readConfigSnapshot(i.filePath));
-        } catch {
-          // 单份读不出来不影响其他版本
-        }
-      }),
+  const refresh = () =>
+    runLoad(
+      setLoading,
+      async () => {
+        const list = await listConfigSnapshots("presets");
+        setItems(list);
+        const map = new Map<string, string>();
+        await Promise.all(
+          list.map(async (i) => {
+            try {
+              map.set(i.filename, await readConfigSnapshot(i.filePath));
+            } catch {
+              // 单份读不出来不影响其他版本
+            }
+          }),
+        );
+        setAllContents(map);
+        const { data } = await loadPresets();
+        setCurrentFile(data);
+      },
+      "psh.loadFailedTitle",
     );
-    setAllContents(map);
-    const { data } = await loadPresets();
-    setCurrentFile(data);
-    setLoading(false);
-  };
 
   useEffect(() => {
     refresh();
@@ -172,20 +178,15 @@ export function PresetsHistoryView({
       onRestored();
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("psh.restoreFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("psh.restoreFailedTitle"), e);
     }
   };
 
   const handleDelete = async (item: ConfigSnapshotItem) => {
-    const confirmed = await confirmAlert({
+    const confirmed = await confirmDestructive({
       title: t("psh.deleteConfirmTitle"),
       message: t("psh.deleteConfirmMessage", { filename: item.filename }),
-      primaryAction: { title: t("common.delete"), style: Alert.ActionStyle.Destructive },
-      dismissAction: { title: t("common.cancel") },
+      actionTitle: t("common.delete"),
     });
     if (!confirmed) return;
     await deleteConfigSnapshot(item.filePath);

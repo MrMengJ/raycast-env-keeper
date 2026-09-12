@@ -1,7 +1,8 @@
-import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useState } from "react";
 import { ENV_KEY_RE, type EnvQuote, isEncryptedValue, isSecretKey } from "@env-butler/core";
 import { t } from "../i18n.js";
+import { showFailureToast } from "./failureToast.js";
 
 export interface VariableFormData {
   key: string;
@@ -85,11 +86,7 @@ export function EditVariableForm({ initialData, customSecrets, onSave }: EditVar
       });
       pop();
     } catch (e) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: t("common.saveFailedTitle"),
-        message: e instanceof Error ? e.message : String(e),
-      });
+      await showFailureToast(t("common.saveFailedTitle"), e);
     }
   };
 
