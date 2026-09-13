@@ -675,7 +675,7 @@ function SnippetListItem({
   onToggleReveal: () => void;
   currentConfig: ShellConfig;
   onRestored: () => void;
-  /** `source ~/.env-butler/shell.sh`,粘进已开的终端就能拿到新增和修改 */
+  /** `source ~/.env-keeper/shell.sh`,粘进已开的终端就能拿到新增和修改 */
   refreshCommand: string;
   /** rc 文件里有没有 source 那一行;没有的话"已启用"的片段其实进不了任何终端 */
   integrationActive: boolean;

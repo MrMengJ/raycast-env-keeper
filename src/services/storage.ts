@@ -46,7 +46,7 @@ import {
 import { t } from "../i18n.js";
 import { type ValidatableShell, validateShellSyntax } from "./shellValidator.js";
 
-const BASE_DIR = join(homedir(), ".env-butler");
+const BASE_DIR = join(homedir(), ".env-keeper");
 const REGISTRY_FILE = join(BASE_DIR, "registry.json");
 const SHELL_CONFIG_FILE = join(BASE_DIR, "shell.json");
 const PRESETS_FILE = join(BASE_DIR, "presets.json");
@@ -377,7 +377,7 @@ export function getShellScriptPath(): string {
 }
 
 /** 写进 rc 文件里的路径:用 `$HOME`,dotfiles 同步到别的机器也能用 */
-const SHELL_SCRIPT_HOME_PATH = '"$HOME/.env-butler/shell.sh"';
+const SHELL_SCRIPT_HOME_PATH = '"$HOME/.env-keeper/shell.sh"';
 
 /**
  * 要写进 rc 文件的那一行。带存在性保护:卸载插件或删掉数据目录之后,每开一个终端都会报"文件不存在",
@@ -393,12 +393,12 @@ export function getShellRefreshCommand(): string {
 }
 
 /** 引用 shell.sh 的各种写法:`~/…`、`$HOME/…`、绝对路径,带不带引号 */
-const SHELL_SCRIPT_REF = String.raw`["']?(?:~|\$HOME|\$\{HOME\}|/[^"'\s]*)/\.env-butler/shell\.sh["']?`;
+const SHELL_SCRIPT_REF = String.raw`["']?(?:~|\$HOME|\$\{HOME\}|/[^"'\s]*)/\.env-keeper/shell\.sh["']?`;
 /** 这一行会真的执行 source(不是注释、不是提到路径的别的命令) */
 const SOURCES_SHELL_SCRIPT_RE = new RegExp(String.raw`(?:^|\s|;|&&|\|\|)(?:source|\.)\s+${SHELL_SCRIPT_REF}(?:\s|;|$)`);
 /**
  * 是不是 Env Keeper 自己写的那一行(整行就是它,前后只允许空白):
- * 老写法 `source /绝对路径/.env-butler/shell.sh`,新写法带 `[ -f … ] &&` 保护
+ * 老写法 `source /绝对路径/.env-keeper/shell.sh`,新写法带 `[ -f … ] &&` 保护
  */
 const ENV_BUTLER_LINE_RE = new RegExp(
   String.raw`^\s*(?:\[\s+-f\s+${SHELL_SCRIPT_REF}\s+\]\s*&&\s*)?source\s+${SHELL_SCRIPT_REF}\s*$`,
@@ -663,7 +663,7 @@ export async function removeShellSourceLine(rcPath: string): Promise<RemoveSourc
 }
 
 /**
- * 确保 ~/.env-butler 及其子目录存在
+ * 确保 ~/.env-keeper 及其子目录存在
  */
 export async function ensureStorageDirs(): Promise<void> {
   if (!existsSync(BASE_DIR)) {
@@ -826,7 +826,7 @@ export async function savePresets(file: PresetsFile): Promise<ConfigSnapshotResu
 }
 
 /**
- * 读取已生成的 ~/.env-butler/shell.sh 原文,用于给用户预览"实际生成了什么、按什么顺序"。
+ * 读取已生成的 ~/.env-keeper/shell.sh 原文,用于给用户预览"实际生成了什么、按什么顺序"。
  * 界面上片段是按类型分组显示的,和文件里的真实先后并不一致,所以需要这个出口。
  */
 export async function readShellScript(): Promise<string> {

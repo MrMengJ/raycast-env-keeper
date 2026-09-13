@@ -12,7 +12,7 @@ import type { ShellConfig } from "@env-butler/core";
 import { createEmptyShellConfig } from "@env-butler/core";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-// storage 在模块加载的那一刻就把数据目录算成 $HOME/.env-butler,所以必须先换掉 HOME 再导入
+// storage 在模块加载的那一刻就把数据目录算成 $HOME/.env-keeper,所以必须先换掉 HOME 再导入
 const home = await mkdtemp(join(tmpdir(), "env-keeper-test-"));
 process.env.HOME = home;
 const storage = await import("../src/services/storage.js");
@@ -21,7 +21,7 @@ afterAll(async () => {
   await rm(home, { recursive: true, force: true });
 });
 
-const dataDir = join(home, ".env-butler");
+const dataDir = join(home, ".env-keeper");
 const modeOf = async (path: string) => (await stat(path)).mode & 0o777;
 
 // 语法检查仅对 zsh / bash 生效(探测不出具体 shell 时按设计跳过校验),换台机器要跟着跳过
@@ -55,13 +55,13 @@ describe("#54 原子写的临时文件", () => {
     const file = join(home, "clean.env");
     await storage.writeFileAtomic(file, "A=1");
     const names = await readdir(home);
-    expect(names.filter((n) => n.includes(".env-butler-tmp"))).toEqual([]);
+    expect(names.filter((n) => n.includes(".env-keeper-tmp"))).toEqual([]);
   });
 
   it("临时文件名以 .env 开头,能被 .env* 忽略规则挡住", async () => {
     // 名字是可推导的:目标文件名 + 标记 + 进程号(不带时间戳,崩溃残片下次写会被覆盖)
     const file = join(home, ".env");
-    const tmp = join(home, `.env.env-butler-tmp-${process.pid}`);
+    const tmp = join(home, `.env.env-keeper-tmp-${process.pid}`);
     expect(tmp.startsWith(join(home, ".env"))).toBe(true);
     await storage.writeFileAtomic(file, "A=1");
     expect(existsSync(tmp)).toBe(false);
@@ -100,7 +100,7 @@ describe("#56 环境文件扫描", () => {
     await writeFile(join(dir, ".env.local"), "B=2");
     await writeFile(join(dir, ".envrc"), "use dotenv");
     await writeFile(join(dir, ".env_副本"), "C=3");
-    await writeFile(join(dir, ".env.env-butler-tmp-1"), "D=4");
+    await writeFile(join(dir, ".env.env-keeper-tmp-1"), "D=4");
 
     expect((await storage.detectProjectEnvFiles(dir)).sort()).toEqual([".env", ".env.local"]);
   });
@@ -223,19 +223,19 @@ describe("#49 rc 里那一行", () => {
     await writeFile(rc, "export PATH=/usr/bin\necho hi\n");
 
     await storage.appendShellSourceLine(rc, storage.getShellSourceLine());
-    expect(await readFile(rc, "utf8")).toContain(".env-butler/shell.sh");
+    expect(await readFile(rc, "utf8")).toContain(".env-keeper/shell.sh");
 
     const { removed } = await storage.removeShellSourceLine(rc);
     expect(removed).toBe(true);
     const after = await readFile(rc, "utf8");
-    expect(after).not.toContain(".env-butler/shell.sh");
+    expect(after).not.toContain(".env-keeper/shell.sh");
     expect(after).toContain("export PATH=/usr/bin");
     expect(after).toContain("echo hi");
   });
 
   it("用户自己包在 if 里的写法不删", async () => {
     const rc = join(home, ".zshrc-own");
-    const own = `if [ -f "$HOME/.env-butler/shell.sh" ]; then\n  source "$HOME/.env-butler/shell.sh"\nfi\n`;
+    const own = `if [ -f "$HOME/.env-keeper/shell.sh" ]; then\n  source "$HOME/.env-keeper/shell.sh"\nfi\n`;
     await writeFile(rc, own);
 
     const { removed, customLineFound } = await storage.removeShellSourceLine(rc);

@@ -18,7 +18,7 @@ Manage every project's `.env` files and your global shell config from Raycast. *
 
 | Command | What it does |
 |---|---|
-| **Manage Envs** | Projects: register a project, manage variables per environment, snapshots and restore, generate `.env.example`.<br>Shell: manage global variables / aliases / snippets and generate `~/.env-butler/shell.sh`. |
+| **Manage Envs** | Projects: register a project, manage variables per environment, snapshots and restore, generate `.env.example`.<br>Shell: manage global variables / aliases / snippets and generate `~/.env-keeper/shell.sh`. |
 | **Search Env Vars** | Search variable names or values across all projects, profiles and the shell config. |
 | **Jump to** | Open a project, env file, profile or shell snippet by name; snippets can be toggled in place. |
 
@@ -28,10 +28,10 @@ The extension **stores no environment data**. Project environments are edited di
 
 The file's fingerprint is recorded on open and checked again before save: if something else changed the file in between, you get to decide instead of a silent overwrite.
 
-Everything the extension owns lives in `~/.env-butler/`, fully transparent:
+Everything the extension owns lives in `~/.env-keeper/`, fully transparent:
 
 ```
-~/.env-butler/
+~/.env-keeper/
 ├── registry.json       # registered projects
 ├── shell.json          # shell snippets
 ├── shell.sh            # generated from shell.json, sourced by .zshrc
