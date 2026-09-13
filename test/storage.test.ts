@@ -8,8 +8,8 @@ import { existsSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ShellConfig } from "@env-butler/core";
-import { createEmptyShellConfig } from "@env-butler/core";
+import type { ShellConfig } from "@env-keeper/core";
+import { createEmptyShellConfig } from "@env-keeper/core";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // storage 在模块加载的那一刻就把数据目录算成 $HOME/.env-keeper,所以必须先换掉 HOME 再导入

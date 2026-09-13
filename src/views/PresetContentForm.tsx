@@ -1,4 +1,4 @@
-import type { Preset } from "@env-butler/core";
+import type { Preset } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { RawContentForm } from "./RawContentForm.js";
 

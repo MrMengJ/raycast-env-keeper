@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Detail, Icon, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { diffEnvVariables, parseEnv, type Preset } from "@env-butler/core";
+import { diffEnvVariables, parseEnv, type Preset } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { diffBlock, envValueDisplayer, formatEnvContentMasked, formatEnvDiff } from "./diffFormat.js";
 

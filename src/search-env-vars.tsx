@@ -11,7 +11,7 @@ import {
   maskSecret,
   parseEnv,
   type ProjectMeta,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { t } from "./i18n.js";
 import { showFailureToast } from "./views/failureToast.js";
 import { detectProjectEnvFiles, loadPresets, loadRegistry, loadShellConfig, readEnvFile } from "./services/storage.js";

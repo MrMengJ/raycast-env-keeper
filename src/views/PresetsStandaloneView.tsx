@@ -1,7 +1,7 @@
 import { List, showToast, Toast } from "@raycast/api";
 import { join } from "node:path";
 import { useEffect, useState } from "react";
-import type { Preset, ProjectMeta } from "@env-butler/core";
+import type { Preset, ProjectMeta } from "@env-keeper/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 import { applyPresetToFile } from "../services/presetApply.js";

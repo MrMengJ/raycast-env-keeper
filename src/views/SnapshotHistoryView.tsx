@@ -8,7 +8,7 @@ import {
   maskSecret,
   parseEnv,
   type ProjectMeta,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { snapshotLimitHint, t } from "../i18n.js";
 import { confirmDestructive } from "./confirmDestructive.js";
 import { showFailureToast } from "./failureToast.js";

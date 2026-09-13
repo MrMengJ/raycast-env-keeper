@@ -4,7 +4,7 @@ import {
   parsePresetsFile,
   type PresetsFile,
   restoreProjectPresets,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { deleteConfigSnapshot, listConfigSnapshots, readConfigSnapshot, rewriteConfigSnapshot } from "./storage.js";
 
 function parseOrNull(text: string): PresetsFile | null {

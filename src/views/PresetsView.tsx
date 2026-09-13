@@ -13,7 +13,7 @@ import {
   removePreset,
   renamePresetGroup,
   updatePreset,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import type { PresetMetaData } from "./PresetMetaForm.js";
 import { t } from "../i18n.js";
 import { confirmDestructive } from "./confirmDestructive.js";

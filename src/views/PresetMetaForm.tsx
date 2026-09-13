@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import type { Preset } from "@env-butler/core";
+import type { Preset } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 import { formatEnvContentMasked } from "./diffFormat.js";

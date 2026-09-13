@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { type ProjectMeta, renameProject } from "@env-butler/core";
+import { type ProjectMeta, renameProject } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 import { loadRegistry, saveRegistry } from "../services/storage.js";

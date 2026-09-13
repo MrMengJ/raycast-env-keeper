@@ -6,7 +6,7 @@ import {
   type ShellLintWarning,
   type ShellSnippet,
   type ShellSnippetType,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 import { isKnownCommand, validateShellSyntax, type ValidatableShell } from "../services/shellValidator.js";

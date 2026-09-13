@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { ENV_KEY_RE, type EnvQuote, isEncryptedValue, isSecretKey } from "@env-butler/core";
+import { ENV_KEY_RE, type EnvQuote, isEncryptedValue, isSecretKey } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 

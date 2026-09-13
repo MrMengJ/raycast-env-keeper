@@ -9,7 +9,7 @@ import {
   removeProject,
   sortProjectsByRecent,
   touchProject,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { t } from "./i18n.js";
 import { confirmDestructive } from "./views/confirmDestructive.js";
 import { showFailureToast } from "./views/failureToast.js";

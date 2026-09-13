@@ -1,4 +1,4 @@
-import type { ShellConflict } from "@env-butler/core";
+import type { ShellConflict } from "@env-keeper/core";
 import { t } from "../i18n.js";
 
 export function conflictWhat(conflict: ShellConflict): string {

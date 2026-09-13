@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { type Preset, type ProjectMeta, recordPresetApplied } from "@env-butler/core";
+import { type Preset, type ProjectMeta, recordPresetApplied } from "@env-keeper/core";
 import { loadPresets, savePresets, writeEnvFileWithSnapshot, type WriteEnvResult } from "./storage.js";
 
 /**

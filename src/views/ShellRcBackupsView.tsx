@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { useEffect, useState } from "react";
-import { maskShellContent } from "@env-butler/core";
+import { maskShellContent } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { confirmDestructive } from "./confirmDestructive.js";
 import { showFailureToast } from "./failureToast.js";

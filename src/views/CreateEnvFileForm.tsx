@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { ENV_TEMPLATE_FILENAMES, isValidEnvFilename } from "@env-butler/core";
+import { ENV_TEMPLATE_FILENAMES, isValidEnvFilename } from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { showFailureToast } from "./failureToast.js";
 import { createEnvFile } from "../services/storage.js";

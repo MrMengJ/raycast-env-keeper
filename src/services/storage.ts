@@ -42,7 +42,7 @@ import {
   CURRENT_PRESETS_VERSION,
   isEnvFilename,
   ENV_TMP_MARKER,
-} from "@env-butler/core";
+} from "@env-keeper/core";
 import { t } from "../i18n.js";
 import { type ValidatableShell, validateShellSyntax } from "./shellValidator.js";
 
