@@ -135,7 +135,7 @@ describe("#56 环境文件扫描", () => {
     const dir = await project("eisdir");
     await mkdir(join(dir, ".env"));
 
-    await expect(storage.readEnvFile(join(dir, ".env"))).rejects.toThrow(/不是文件/);
+    await expect(storage.readEnvFile(join(dir, ".env"))).rejects.toThrow(/isn't a file/);
     expect(await storage.createEnvFile(dir, ".env")).toEqual({ created: false, notAFile: true });
   });
 });
@@ -150,7 +150,7 @@ describe("#49 写 shell.sh 前先查语法", () => {
     await storage.loadShellConfig();
     const before = await readFile(join(dataDir, "shell.json"), "utf8");
 
-    await expect(storage.saveShellConfig(configWith("if true; then"))).rejects.toThrow(/语法/);
+    await expect(storage.saveShellConfig(configWith("if true; then"))).rejects.toThrow(/syntax error/);
     // shell.json 一个字都没动(检查放在两次写之前,不会出现 json 更新了、sh 没更新)
     expect(await readFile(join(dataDir, "shell.json"), "utf8")).toBe(before);
   });

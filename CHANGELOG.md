@@ -2,50 +2,49 @@
 
 ## [Initial Version] - {PR_MERGE_DATE}
 
-首个版本。
+First release.
 
-**项目轨**
+**Projects**
 
-- 手动登记项目,可重命名,按最近使用排序;目录被搬走时可重新指向,已有设置保留
-- 变量增删改查,支持单行/多行值、三种引号、`export` 前缀与行内注释(解析规则与 dotenv 逐例对照过);值含换行、`#`、首尾空格时自动加引号,读回来不走样
-- 启用/停用 = 注释掉该行,遵循 dotenv 惯例;同一个变量写了两行时按行操作、互不干扰,并标出「重复」
-- 敏感字段自动识别(按名字的关键词,加上带账号密码的连接串按值识别)+ 按项目手动标记 / 取消,列表打码、可一键揭示;复制值不进剪贴板历史
-- 多环境:环境名任意(支持 `.env.development.local` 这类多段命名),一环境一文件;只认真正的环境文件,`.envrc` 等绝不列出;可把当前环境复制为 `.env`(覆盖前确认)
-- 每次写入前自动快照(按项目 id 存放,同名项目不串),可查看差异、回滚、批量清理;文件空了也能进历史
-- `.env.example` 合并式生成:保留模板里手写的说明,只增删键
-- 方案:几套平行的 .env 内容存在插件里(不往项目目录放文件),随时整份套用;
-  可从当前文件存、可空白新建、可复制一份改;套用前看差异摘要,套用后手改了会提示;可分组(按组筛选、搜索,整组改名或解散)、可查历史
-- 新建的空环境文件可以参考项目里已有文件的结构(不带值)或完整复制
-- 识别 dotenvx 的 `encrypted:` 前缀,阻止误改;检测到 `.envrc` 只提示不改动
+- Register projects by hand, rename them, sorted by most recently used; re-point a project whose directory moved and keep its settings
+- Create, edit and delete variables with single-line / multi-line values, all three quoting styles, the `export` prefix and inline comments (parsing rules compared case by case against dotenv); values containing newlines, `#` or surrounding whitespace are quoted automatically and read back unchanged
+- Enable / disable = comment the line out, following dotenv convention; when a variable appears twice, each line is handled on its own and marked as a duplicate
+- Secrets are detected automatically (keywords in the name, plus connection strings with credentials detected by value) and can be marked / unmarked per project; masked in lists, revealed with one shortcut; copying a value keeps it out of clipboard history
+- Multiple environments: any name (including multi-part names like `.env.development.local`), one file per environment; only real env files are listed — `.envrc` and the like never appear; copy the current environment to `.env` (confirmation before overwrite)
+- A snapshot before every write (stored by project id, so same-named projects never mix); view diffs, roll back, clean up in bulk; an emptied file still enters history
+- `.env.example` generated as a merge: hand-written notes in the template are kept, only keys are added or removed
+- Profiles: several parallel sets of `.env` content kept inside the extension (no files written into the project), applied as a whole at any time; save from the current file, start blank, or duplicate one; diff summary before applying, a notice if the file was edited by hand afterwards; grouping (filter and search by group, rename or dissolve a whole group); history
+- A new empty env file can borrow the structure of an existing one (without values) or copy it entirely
+- Recognizes dotenvx's `encrypted:` prefix and blocks accidental edits; a detected `.envrc` only produces a notice, nothing is touched
 
-**Shell 轨**
+**Shell**
 
-- 环境变量 / alias / 脚本片段的增删改查与启停,可调整生成顺序;可分组(按组分区、整组启停 / 改名 / 解散),类型退成图标
-- 两个已启用片段设置了同一个变量或同名 alias 时提示重复、说明以谁为准(不阻断);一行多个赋值、`alias -g` 都认,函数体里的局部变量不算
-- 改动后提示"对新开的终端生效";「复制刷新命令」让已开的终端拿到新增和修改,并说明停用 / 删除为什么刷不掉
-- 一键写入或移除 `.zshrc` 里的 source 行(带文件存在性保护、用 `$HOME`;自动探测真实登录 shell,改动前备份;只删自己写的那一行,别的内容不动)
-- 按真实 shell 做语法校验(`zsh -n` / `bash -n`),识别不出则跳过不阻断
-- 拼写提醒:`exprot` 这类语法合法、但永远不会生效的写法会在保存前问一声
-- 可预览实际生成的 `shell.sh`,片段内容默认打码
-- 完整的配置历史与回滚,可只看某一个片段的变更历史
-- `.zshrc` 备份列表:自动备份可见可恢复,也能随时手动备份到默认目录或自选位置
+- Create, edit, delete and enable / disable environment variables, aliases and script snippets; reorder them; grouping (a section per group, toggle / rename / dissolve a whole group); the type is shown as an icon
+- When two enabled snippets set the same variable or alias, a duplicate notice explains which one wins (nothing is blocked); multiple assignments on one line and `alias -g` are recognized; local variables inside function bodies don't count
+- After a change, a hint says it applies to new terminals; "Copy Refresh Command" brings additions and edits into terminals already open, and explains why disabling / deleting can't be refreshed that way
+- Add or remove the `source` line in `.zshrc` with one action (guarded by a file-exists check, uses `$HOME`; the real login shell is detected and a backup is taken before any change; only the line written by the extension is removed, everything else stays)
+- Syntax validation with the real shell (`zsh -n` / `bash -n`); skipped without blocking when the shell isn't recognized
+- Spelling hint: things like `exprot` are valid syntax that will never take effect — you are asked before saving
+- Preview the generated `shell.sh`, with snippet contents masked by default
+- Full config history with rollback; view the history of a single snippet
+- `.zshrc` backup list: automatic backups are visible and restorable; manual backups go to the default directory or a location of your choice
 
-**全局**
+**Global**
 
-- `Jump to` 命令:按名字直达项目 / 环境文件 / 方案 / Shell 片段(分组、备注、类型词都是关键词);片段可就地启停
-- 跨项目 + 方案 + Shell 轨的变量搜索,可按变量名或变量值搜,跳转直接落在搜到的那一项上;Shell 里被同名片段覆盖的值会标出来
-- 快捷键统一:⌘T 启停、⌘⇧M 显示明文、⌘⇧H 快照历史、⌘N 新建;回车永远是无害动作
-- 登录 shell 不是 zsh / bash 时如实说明 Shell 轨不适用
-- 中文 / English 界面
-- 配置文件损坏或读不出来时保住原文件并明确报错,修好之前拒绝写入,绝不静默清空
+- `Jump to` command: open a project / env file / profile / shell snippet by name (group, note and type words are all searchable); snippets can be toggled in place
+- Variable search across projects, profiles and the shell config, by name or by value; the jump lands directly on the matched item; shell values overridden by a same-named snippet are marked
+- Consistent shortcuts: ⌘T toggle, ⌘⇧M reveal, ⌘⇧H snapshot history, ⌘N new; Enter is always a harmless action
+- When the login shell is neither zsh nor bash, the Shell section says so plainly
+- Interface in English or Simplified Chinese
+- If a config file is corrupted or unreadable, the original is preserved and a clear error is shown; writes are refused until it's fixed — it is never silently emptied
 
-**安全与隐私**
+**Security & privacy**
 
-- 数据目录和其中新建的文件按"只有你能读"创建(目录 700、文件 600),`shell.sh` 同样是 600;你自己 chmod 放宽过的文件不会被改回去
-- 快照跟随源文件的权限:源 `.env` 是 600,旁边的历史副本也是 600(此前是 644,连早就删掉的旧密钥都在里面)
-- 片段的名称 / 分组 / 备注里混进的换行会被清掉——那会让注释行断成一条每次开终端都执行的命令
-- 保存前用你的真实 shell 对整份脚本做语法校验,拼起来跑不通就不写入(此前只校验单个片段)
-- 原子写的临时文件改以 `.env` 开头(能被 `.env*` 忽略规则挡住)、不再带时间戳(崩溃残片下次写同一个文件就会被覆盖),正常写完不留痕
-- 打码补齐 `Authorization: Bearer …` 这类认证值;"整段敏感"的标记在「预览生成的 shell.sh」里同样生效,并且预览与磁盘不一致时会说明
-- 引号跨行的赋值(形如 `export API_KEY="第一行` 接下一行)此前完全不打码,现在整段遮住
-- 快捷方式(软链)形式的环境文件会被列出并正常读写(写的是它指向的真实文件,链接本身不动);名字被同名文件夹占住时给一句人话,不再抛系统错误
+- The data directory and the files created in it are private to you (directory 700, files 600), `shell.sh` included; files you loosened with chmod yourself are left alone
+- Snapshots inherit the source file's permissions: a 600 `.env` gets 600 history copies (previously 644 — and those copies contain keys you deleted long ago)
+- Newlines slipped into a snippet's name / group / note are stripped — they would split the comment line into a command executed on every new terminal
+- Before writing, the whole generated script is syntax-checked with your real shell; if the assembled file doesn't parse, nothing is written (previously only single snippets were checked)
+- Temp files for atomic writes now start with `.env` (caught by `.env*` ignore rules) and carry no timestamp (a leftover from a crash is overwritten by the next write of the same file); a normal write leaves nothing behind
+- Masking now covers auth values like `Authorization: Bearer …`; the "whole snippet is secret" flag also applies in the `shell.sh` preview, which says so when it differs from what's on disk
+- Quoted assignments spanning lines (like `export API_KEY="first line` continuing on the next) were previously not masked at all; the whole value is now hidden
+- Env files that are symlinks are listed and read / written normally (the target is written, the link itself is untouched); when the name is taken by a directory you get a plain message instead of a system error

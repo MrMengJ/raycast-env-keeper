@@ -1,64 +1,59 @@
 # Env Keeper
 
-在 Raycast 里管理所有项目的 `.env` 文件和全局 shell 配置。**本地、免费、键盘优先。**
+Manage every project's `.env` files and your global shell config from Raycast. **Local-only, free, keyboard-first.**
 
-> 名字来自 butler(管家):`.env` 文件是主人的,扩展只管递取、登记、看守,自己不存数据。
+> The name comes from "butler": your `.env` files belong to you. The extension fetches, registers and guards them — it never keeps a copy of its own.
 
-## 它解决什么
+## What it solves
 
-`.env` 散落在各个项目里,全局环境变量藏在 `~/.zshrc` 里。想看某个密钥在哪个项目配过、
-想临时停用一个变量、想给团队生成一份 `.env.example`——都得手动翻文件。
-Env Keeper 把这些事收进一个键盘驱动的面板。
+`.env` files are scattered across projects, and global environment variables hide in `~/.zshrc`. To find which project uses a given key, temporarily disable a variable, or generate a `.env.example` for your team, you end up opening files by hand. Env Keeper puts all of that into one keyboard-driven panel.
 
-## 三个卖点
+## Three highlights
 
-- **敏感值默认打码** —— 列表里只显示 `••••••••`,需要时一键揭示;复制密钥不进剪贴板历史
-- **每次修改前自动快照** —— `.env` 不进 git 也有完整历史,随时回滚
-- **一键生成 `.env.example`** —— 而且是**合并**式更新,不会冲掉模板里手写的说明
+- **Secrets are masked by default** — lists show `••••••••`; reveal with one shortcut. Copying a secret keeps it out of clipboard history.
+- **A snapshot before every write** — full history for `.env` even though it never enters git; roll back anytime.
+- **`.env.example` in one step** — generated as a **merge**, so hand-written notes in the template survive.
 
-## 两个命令
+## Commands
 
-| 命令 | 做什么 |
+| Command | What it does |
 |---|---|
-| **Manage Envs** | 项目环境:登记项目、管理各环境的变量、快照与恢复、生成 `.env.example`<br>全局环境:管理 shell 的全局变量 / alias / 脚本片段,生成 `~/.env-butler/shell.sh` |
-| **Search Env Vars** | 跨所有项目、方案和全局环境搜变量名 / 变量值 |
-| **Jump to** | 按名字直达某个项目、环境文件、方案或 Shell 片段;片段可以就地启用 / 停用 |
+| **Manage Envs** | Projects: register a project, manage variables per environment, snapshots and restore, generate `.env.example`.<br>Shell: manage global variables / aliases / snippets and generate `~/.env-butler/shell.sh`. |
+| **Search Env Vars** | Search variable names or values across all projects, profiles and the shell config. |
+| **Jump to** | Open a project, env file, profile or shell snippet by name; snippets can be toggled in place. |
 
-## 核心设计:文件就是真相源
+## Core design: files are the source of truth
 
-扩展**不存环境数据**。项目环境直接编辑项目目录下的 `.env` 文件——没有第二份副本,
-所以它天然和 git、同事、Vite、Docker 共存。
+The extension **stores no environment data**. Project environments are edited directly in the `.env` files under the project directory — there is no second copy, so it coexists naturally with git, teammates, Vite and Docker.
 
-打开时记下文件指纹,保存前再摸一次:文件被外部改过就弹窗让你裁决,而不是默默覆盖。
+The file's fingerprint is recorded on open and checked again before save: if something else changed the file in between, you get to decide instead of a silent overwrite.
 
-扩展自己的数据都在 `~/.env-butler/`,全透明:
+Everything the extension owns lives in `~/.env-butler/`, fully transparent:
 
 ```
 ~/.env-butler/
-├── registry.json       # 项目注册表
-├── shell.json          # Shell 片段
-├── shell.sh            # 由 shell.json 生成,被 .zshrc source
-├── snapshots/          # 各项目 .env 的历史
-├── config-history/     # 上面两个配置文件自己的历史
-└── backups/            # 改 .zshrc 之前的备份
+├── registry.json       # registered projects
+├── shell.json          # shell snippets
+├── shell.sh            # generated from shell.json, sourced by .zshrc
+├── snapshots/          # history of each project's .env files
+├── config-history/     # history of the two config files above
+└── backups/            # backups taken before touching .zshrc
 ```
 
-**换机器 = 拷这个目录。**
+**Moving to a new machine = copying this directory.**
 
-## 安全边界(请务必知道)
+## Security boundaries (please read)
 
-- 打码**只影响显示**。`.env` 和 `shell.sh` 里必须是明文,否则程序和 shell 读不到。
-  它防的是别人瞄到你的屏幕,不是防文件被读走
-- 扩展**不做加密**。要加密请用 [dotenvx](https://dotenvx.com);Env Keeper 能识别
-  `encrypted:` 前缀并阻止你误改
-- 扩展**绝不读取或修改 `.envrc`**,只会在检测到时提醒你 direnv 的存在
+- Masking **affects display only**. `.env` and `shell.sh` must stay in plain text or your programs and shell can't read them. It protects against someone glancing at your screen, not against the file being read.
+- The extension **does not encrypt**. For encryption use [dotenvx](https://dotenvx.com); Env Keeper recognizes the `encrypted:` prefix and stops you from editing those values by accident.
+- The extension **never reads or modifies `.envrc`**. If one is present, it only tells you that direnv is in play.
 
-## 兼容性
+## Compatibility
 
-- macOS,shell 为 zsh 或 bash(会探测你真实的登录 shell 决定改 `~/.zshrc` 还是 `~/.bash_profile`)
-- 用 fish 等其他 shell 时,shell 语法校验会自动跳过,不阻断保存
-- `.env` 行内注释的解析规则与 `dotenv` 一致,保证界面显示的值 == 程序拿到的值
+- macOS with zsh or bash as the login shell (the real login shell is detected to decide between `~/.zshrc` and `~/.bash_profile`).
+- With fish or another shell, syntax validation is skipped automatically and never blocks saving.
+- Inline comments in `.env` are parsed the same way `dotenv` does, so the value shown in the UI equals the value your program gets.
 
-## 界面语言
+## Interface language
 
-扩展偏好设置里可切换中文 / English。
+English by default; Simplified Chinese can be selected in the extension preferences.

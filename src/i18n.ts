@@ -1409,9 +1409,9 @@ const dicts: Record<Lang, Record<DictKey, string>> = { zh, en };
 export function getLang(): Lang {
   try {
     const prefs = getPreferenceValues<{ language?: string }>();
-    return prefs.language === "en" ? "en" : "zh";
+    return prefs.language === "zh" ? "zh" : "en";
   } catch {
-    return "zh";
+    return "en";
   }
 }
 

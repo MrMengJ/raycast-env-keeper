@@ -40,11 +40,11 @@
   "preferences": [
     {
       "name": "language",
-      "title": "Language / 界面语言",
-      "description": "Env Keeper 界面显示语言 / Display language for Env Keeper's interface",
+      "title": "Language",
+      "description": "Display language for Env Keeper's interface",
       "type": "dropdown",
       "required": false,
-      "default": "zh",
+      "default": "en",
       "data": [
         {
           "title": "简体中文",
@@ -59,7 +59,7 @@
   ],
   "dependencies": {
     "@env-butler/core": "file:../env-butler/core",
-    "@raycast/api": "^1.104.20",
+    "@raycast/api": "^2.3.1",
     "@raycast/utils": "^2.2.7"
   },
   "devDependencies": {
@@ -72,7 +72,7 @@
     "vitest": "^5.0.0"
   },
   "scripts": {
-    "build": "ray build",
+    "build": "ray build -e dist",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
