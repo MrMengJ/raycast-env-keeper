@@ -543,8 +543,9 @@ function ShellScriptPreview({ snippets }: { snippets: ShellSnippet[] }) {
   const visibleScript = generateShellScript(snippets, {
     transformContent: (snippet, text) => (reveal ? text : maskShellContent(text, { maskAll: snippet.containsSecret })),
   });
-  // 磁盘上的文件跟"拿现在这份配置生成出来的"不一样:上次写盘没成功,或者有人手改过。如实说
-  const stale = content !== null && content.trim() !== "" && content !== visibleScript;
+  // 磁盘上的文件跟"拿现在这份配置生成出来的"不一样:上次写盘没成功,或者有人手改过。如实说。
+  // 比对必须用没打码的那份——拿打码后的预览去比,只要有一个片段含密钥就永远"不一致"
+  const stale = content !== null && content.trim() !== "" && content !== generateShellScript(snippets);
 
   let markdown = "";
   if (content !== null) {
