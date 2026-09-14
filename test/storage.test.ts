@@ -206,11 +206,7 @@ describe("#53 快照继承源文件权限", () => {
 
       expect(new Set(paths).size).toBe(3);
       // 每一份存的是"写之前那一版",一份都没被后来者盖掉
-      expect(await Promise.all(paths.map((p) => readFile(p, "utf8")))).toEqual([
-        "SECRET=v1",
-        "SECRET=v2",
-        "SECRET=v3",
-      ]);
+      expect(await Promise.all(paths.map((p) => readFile(p, "utf8")))).toEqual(["SECRET=v1", "SECRET=v2", "SECRET=v3"]);
     } finally {
       vi.useRealTimers();
     }
@@ -231,6 +227,21 @@ describe("#49 rc 里那一行", () => {
     expect(after).not.toContain(".env-keeper/shell.sh");
     expect(after).toContain("export PATH=/usr/bin");
     expect(after).toContain("echo hi");
+  });
+
+  it("前面有单行 if …; fi 时照样能删(块深度别算错)", async () => {
+    const rc = join(home, ".zshrc-oneline-if");
+    const prefix = 'if [ -n "$SOME_TOOL" ]; then PATH="$HOME/.tool/bin:$PATH"; fi\ncase ":$PATH:" in *) ;; esac\n';
+    await writeFile(rc, prefix);
+    await storage.appendShellSourceLine(rc, storage.getShellSourceLine());
+
+    const { removed, customLineFound } = await storage.removeShellSourceLine(rc);
+    expect(removed).toBe(true);
+    expect(customLineFound).toBeFalsy();
+    const after = await readFile(rc, "utf8");
+    expect(after).not.toContain(".env-keeper/shell.sh");
+    expect(after).not.toContain("Added by Env Keeper");
+    expect(after.startsWith(prefix)).toBe(true);
   });
 
   it("用户自己包在 if 里的写法不删", async () => {

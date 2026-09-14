@@ -622,6 +622,18 @@ export interface RemoveSourceLineResult {
   customLineFound?: boolean;
 }
 
+/** 数一行里开块/关块的关键字:if/while/until/for/case 开,fi/done/esac 关,只认语句开头的;花括号按个数 */
+function countBlockKeywords(line: string): { opens: number; closes: number } {
+  let opens = line.match(/\{/g)?.length ?? 0;
+  let closes = line.match(/\}/g)?.length ?? 0;
+  for (const stmt of line.split(/;|&&|\|\|/)) {
+    const head = stmt.trim();
+    if (/^(if|while|until|for|case)\b/.test(head)) opens += 1;
+    if (/^(fi|done|esac)\b/.test(head)) closes += 1;
+  }
+  return { opens, closes };
+}
+
 /**
  * 从 shell 配置文件里移除 Env Keeper 写入的那一行(与 appendShellSourceLine 对称)。
  * **只删自己写的格式**(整行就是那句 source,老写法新写法都认),顺手删掉紧邻在它前面的标记注释(新的 "Added by Env Keeper"、改名前的 "Added by Env Butler" 都认);
@@ -637,12 +649,12 @@ export async function removeShellSourceLine(rcPath: string): Promise<RemoveSourc
   let removed = false;
   let customLineFound = false;
 
-  // 粗略跟踪块结构:写在 if … fi / { … } / do … done 里面的那一行不算我们的,删了会把块删空、每开一个终端都报语法错
+  // 粗略跟踪块结构:写在 if … fi / { … } / do … done 里面的那一行不算我们的,删了会把块删空、每开一个终端都报语法错。
+  // 关键字按"语句开头"数,语句以 ; && || 分隔——单行的 `if …; then …; fi`(工具自动写进 rc 的常见写法)开和关在同一行,
+  // 只看行首会把它算成永远没关上的块,后面所有行都被当成块内,我们自己写的那行也就删不掉了
   let depth = 0;
   for (const line of rawLines) {
-    const trimmed = line.trim().replace(/\r$/, "");
-    const opens = (/^(if|while|until|for|case)\b/.test(trimmed) ? 1 : 0) + (trimmed.match(/\{/g)?.length ?? 0);
-    const closes = (/^(fi|done|esac)\b/.test(trimmed) ? 1 : 0) + (trimmed.match(/\}/g)?.length ?? 0);
+    const { opens, closes } = countBlockKeywords(line.replace(/\r$/, ""));
     const insideBlock = depth > 0;
     if (!insideBlock && isEnvButlerSourceLine(line)) {
       removed = true;
