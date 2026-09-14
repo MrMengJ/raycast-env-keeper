@@ -4,7 +4,7 @@
   "title": "Env Keeper",
   "description": "Manage all your projects' .env files and global shell config, right from Raycast. Local-only, keyboard-first, free.",
   "icon": "extension-icon.png",
-  "author": "xiuman",
+  "author": "Mr-MJ",
   "platforms": [
     "macOS"
   ],
