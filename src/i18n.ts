@@ -24,14 +24,16 @@ const zh = {
   // ---- 配置文件异常提示 ----
   "cfg.sectionTitle": "需要你处理",
   "cfg.corruptedTitle": "配置文件读不出来，已保住原文件",
-  "cfg.corruptedSubtitle": "原文件已改名为 {name}，里面的内容还在。把格式修好后改回原名就能恢复",
+  "cfg.corruptedDetail": "原文件已改名为 {name}，里面的内容还在。把格式修好后改回原名就能恢复",
   "cfg.tooNewTitle": "配置文件来自更新版本的 Env Keeper",
-  "cfg.tooNewSubtitle":
-    "文件版本 {version}，当前扩展只认到 {current}。原文件已改名为 {name}，升级扩展后改回原名即可恢复",
+  "cfg.tooNewDetail": "文件版本 {version}，当前扩展只认到 {current}。原文件已改名为 {name}，升级扩展后改回原名即可恢复",
+  "cfg.detailsHint": "按 Enter 查看说明",
+  "cfg.close": "关闭",
+  "cfg.showDetails": "查看说明",
   "cfg.showBackup": "在访达中显示原文件",
   "cfg.unreadableTitle": "配置文件读不出来，请检查权限",
-  "cfg.unreadableSubtitle": "{name} 还在原位，但读取失败。修好之前不会写入，免得覆盖它",
-  "cfg.notQuarantinedSubtitle": "没能把 {name} 挪到一边，它还在原位。修好格式之前不会写入，免得覆盖它",
+  "cfg.unreadableDetail": "{name} 还在原位，但读取失败。修好之前不会写入，免得覆盖它",
+  "cfg.notQuarantinedDetail": "没能把 {name} 挪到一边，它还在原位。修好格式之前不会写入，免得覆盖它",
   "cfg.writeBlockedUnreadable": "{name} 读不出来，为了不覆盖它，这次没有保存。请检查文件权限",
   "cfg.writeBlockedCorrupted": "{name} 的内容坏了且还在原位，为了不覆盖它，这次没有保存。请先修好格式或把它挪开",
 
@@ -705,37 +707,36 @@ const en: Record<DictKey, string> = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.fileSizeBytes": "{size} bytes",
-  "common.notAFile":
-    "\"{file}\" isn't a file (it may be a folder of the same name), so it can't be used as an env file",
+  "common.notAFile": "{file} isn't a file (maybe a folder with that name)",
   "common.delete": "Delete",
   "common.saveFailedTitle": "Save Failed",
   "common.searchPlaceholder": "Search...",
-  "common.showDataDir": "Show Data Folder in Finder (copy it to move to a new machine)",
-  "common.snapshotLimitMessage":
-    "{count} snapshots kept (we suggest staying under {limit}) — you can clear out old ones in Snapshot History",
+  "common.showDataDir": "Show Data Folder in Finder",
+  "common.snapshotLimitMessage": "{count} snapshots kept (limit {limit}); clean up old ones",
 
   "cfg.sectionTitle": "Needs Your Attention",
-  "cfg.corruptedTitle": "Could not read the config file — the original was kept",
-  "cfg.corruptedSubtitle":
-    "The original was renamed to {name} and still holds your data. Fix its format and rename it back to restore it",
-  "cfg.tooNewTitle": "This config file comes from a newer Env Keeper",
-  "cfg.tooNewSubtitle":
-    "The file is version {version}, but this version of the extension only understands up to {current}. The original was renamed to {name} — update the extension and rename it back to restore it",
+  "cfg.corruptedTitle": "Config file is damaged",
+  "cfg.corruptedDetail":
+    "The original was renamed to {name} and still holds your data. Fix its format and rename it back to restore it. Nothing will be written until then.",
+  "cfg.tooNewTitle": "Config file is from a newer version",
+  "cfg.tooNewDetail":
+    "The file is version {version}, but this build of Env Keeper only understands up to {current}. The original was renamed to {name} — update the extension and rename it back to restore it.",
+  "cfg.detailsHint": "Press Enter for details",
+  "cfg.close": "Close",
+  "cfg.showDetails": "Show Details",
   "cfg.showBackup": "Show Original File in Finder",
-  "cfg.unreadableTitle": "Could not read the config file — check its permissions",
-  "cfg.unreadableSubtitle":
-    "{name} is still in place but could not be read. Nothing will be written until it is fixed, so it won't be overwritten",
-  "cfg.notQuarantinedSubtitle":
-    "{name} could not be moved aside and is still in place. Nothing will be written until it is fixed, so it won't be overwritten",
-  "cfg.writeBlockedUnreadable":
-    "{name} could not be read, so nothing was saved to avoid overwriting it. Check the file permissions",
-  "cfg.writeBlockedCorrupted":
-    "{name} is damaged and still in place, so nothing was saved to avoid overwriting it. Fix it or move it aside first",
+  "cfg.unreadableTitle": "Config file is unreadable",
+  "cfg.unreadableDetail":
+    "{name} is still in place but could not be read. Check its permissions. Nothing will be written until it is fixed, so it won't be overwritten.",
+  "cfg.notQuarantinedDetail":
+    "{name} is damaged and could not be moved aside, so it is still in place. Nothing will be written until it is fixed, so it won't be overwritten.",
+  "cfg.writeBlockedUnreadable": "{name} can't be read; nothing was saved. Check permissions",
+  "cfg.writeBlockedCorrupted": "{name} is damaged; nothing was saved to protect it",
 
   "mv.searchPlaceholderProjects": "Search registered projects...",
   "mv.trackTooltip": "Switch Track",
   "mv.trackProjects": "Project Envs (.env Files)",
-  "mv.trackShell": "Global Shell (Variables and Aliases)",
+  "mv.trackShell": "Global Shell (vars & aliases)",
   "mv.sectionTitle": "Registered Projects",
   "mv.sectionSubtitle": "{count} project(s)",
   "mv.envCountAccessory": "{count} env file(s)",
@@ -796,7 +797,7 @@ const en: Record<DictKey, string> = {
   "pd.exampleConfirmMessage":
     "{added} variables will be added and {removed} removed. The other {kept} variables keep exactly what the template already says, including hand-written notes and placeholder values.\n\nA snapshot is saved first, so you can always restore from Snapshot History.",
   "pd.exampleConfirmAction": "Update",
-  "pd.exampleNoChangeToast": ".env.example is already up to date — nothing to change",
+  "pd.exampleNoChangeToast": ".env.example is already up to date",
   "pd.exampleSummary": "{added} added, {removed} removed, {kept} kept",
   "pd.alreadyMainEnvToast": "This is already the .env file",
   "pd.copyOverwriteConfirmTitle": "Overwrite the existing .env?",
@@ -805,10 +806,10 @@ const en: Record<DictKey, string> = {
   "pd.copyOverwriteConfirmAction": "Overwrite",
   "pd.copiedAsMainEnvToast": "Copied {file} as .env",
   "pd.envrcTitle": "This project has an .envrc (direnv)",
-  "pd.envrcSubtitle": "Env Keeper will not modify .envrc — please make sure your direnv setup works together with .env",
+  "pd.envrcSubtitle": "Left untouched; check your direnv setup",
   "pd.envrcLearnMore": "Learn More",
-  "pd.envrcDismiss": "Don't Show Again for This Project",
-  "pd.envrcDismissedToast": "Won't show the .envrc notice for this project again",
+  "pd.envrcDismiss": "Hide Notice for This Project",
+  "pd.envrcDismissedToast": "Notice hidden for this project",
   "pd.envrcDetailMarkdown": `# What is .envrc?
 
 **direnv** is a third-party shell tool (not a feature of Env Keeper). Once installed, it automatically loads the environment variables defined in \`.envrc\` when you \`cd\` into a directory that contains one, and unloads them when you leave.
@@ -853,7 +854,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "pd.actionDelete": "Delete Variable",
   "pd.actionSnapshotHistory": "View Snapshot History",
   "pd.actionGenerateExample": "Generate/Update .env.example",
-  "pd.actionCopyAsMainEnv": "Copy Current Environment as .env",
+  "pd.actionCopyAsMainEnv": "Copy This Environment to .env",
   "pd.lockTooltip": "Sensitive field (masked)",
   "pd.disabledTag": "Commented Out",
   "pd.encryptedTag": "Encrypted",
@@ -871,22 +872,21 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
     "Are you sure you want to remove {key} from {file}? A backup snapshot will be created automatically before the change.",
   "pd.emptyTitle": "No Variables in This Environment",
   "pd.emptyDesc": "File path: {path}\nPress ⌘N to create your first variable",
-  "pd.fillStructureMenuTitle": "Reference Structure from Another Environment",
-  "pd.fillFullMenuTitle": "Copy Full Content from Another Environment",
-  "pd.fillStructureSuccessToast": "Filled in the structure of {file} (no real values)",
-  "pd.fillFullSuccessToast": "Copied full content from {file} (including real values)",
+  "pd.fillStructureMenuTitle": "Copy Structure From…",
+  "pd.fillFullMenuTitle": "Copy Content From…",
+  "pd.fillStructureSuccessToast": "Copied structure of {file} (no values)",
+  "pd.fillFullSuccessToast": "Copied content from {file} (real values included)",
   "pd.fillFailedTitle": "Could Not Fill In Content",
 
   "raw.contentTitle": "Content",
   "raw.notSavedTitle": "Not Saved",
-  "raw.notSavedMessage":
-    "Your text is still in the editor. The file has been reloaded with the external changes; saving again will use what is in the editor",
+  "raw.notSavedMessage": "Reloaded from disk; your edits are still in the editor",
 
   "ps.sectionTitle": "Profiles",
   "ps.applyMenuTitle": "Apply Profile",
   "ps.saveAsNew": "Save as New Profile",
   "ps.sectionCreate": "Create",
-  "ps.nameDuplicateError": "This project already has a profile with that name. Try another.",
+  "ps.nameDuplicateError": "A profile with that name already exists",
   "ps.createBlank": "New Blank Profile",
   "ps.blankContentPlaceholder": "KEY=value\n# one per line, same syntax as .env",
   "ps.actionDuplicate": "Duplicate",
@@ -965,12 +965,12 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ps.driftTitle": "{file} changed after applying “{name}”",
   "ps.driftSubtitle": "The two no longer match",
   "ps.driftViewDiff": "View Differences",
-  "ps.driftUpdatePreset": "Update “{name}” with These Changes",
+  "ps.driftUpdatePreset": "Save Changes to “{name}”",
   "ps.driftUpdateConfirmTitle": "Overwrite profile “{name}” with the current content of {file}?",
   "ps.driftUpdateConfirmMessage": "The previous content goes into the profile history and can be recovered.",
   "ps.driftUpdateConfirmAction": "Update Profile",
   "ps.driftDismiss": "Dismiss",
-  "ps.driftDismissedToast": "Dismissed until the next time you apply a profile",
+  "ps.driftDismissedToast": "Hidden until the next profile is applied",
 
   "psh.navTitle": "Profile History · {project}",
   "psh.sectionTitle": "History",
@@ -992,7 +992,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "psh.infoCount": "Profiles",
   "psh.contentHeading": "This Project's Profiles at That Time",
   "psh.contentEmpty": "(none at that time)",
-  "psh.actionCopy": "Copy This Version (This Project Only)",
+  "psh.actionCopy": "Copy This Version",
   "psh.actionDelete": "Delete This Record",
   "psh.deleteConfirmTitle": "Delete this history record?",
   "psh.deleteConfirmMessage": "Delete {filename}. This cannot be undone.",
@@ -1002,7 +1002,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "psh.cleanupDescription":
     "Only removes what “{project}” recorded in these versions. Other projects keep every restore point, and profiles themselves are untouched.",
   "psh.focusNavTitle": "History of “{name}”",
-  "psh.focusActionRestore": "Restore This Profile to This Version",
+  "psh.focusActionRestore": "Restore This Profile",
   "psh.focusRestoreConfirmTitle": "Restore “{name}” to how it was at {time}?",
   "psh.focusRestoreConfirmMessage":
     "Only this profile (name, note, group, content) is restored; others are untouched. The current state is recorded first, so this can be undone.",
@@ -1015,7 +1015,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ps.actionFocusHistory": "View This Profile's History",
 
   "ev.keyEmptyError": "Variable name cannot be empty",
-  "ev.keyInvalidError": "Invalid variable name: only letters, digits, underscores, dots and hyphens are allowed",
+  "ev.keyInvalidError": "Only letters, digits, _ . and - are allowed",
   "ev.keyTitle": "Key",
   "ev.keyPlaceholder": "e.g. DATABASE_URL, PORT",
   "ev.valueTitle": "Value",
@@ -1025,17 +1025,16 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "ev.commentInfo":
     "A note kept at the end of this line, saved as KEY=value # note. It is preserved when generating .env.example. Leave empty for no comment.",
   "ev.quoteTitle": "Wrap with Quotes",
-  "ev.quoteNone": "No quotes (recommended when the value has no special characters)",
+  "ev.quoteNone": "None (recommended for plain values)",
   "ev.quoteDouble": 'Double quotes "..."',
   "ev.quoteSingle": "Single quotes '...'",
   "ev.quoteBacktick": "Backticks `...`",
-  "ev.disabledLabel": "Disable this variable (commented out in .env)",
+  "ev.disabledLabel": "Disabled (commented out in .env)",
   "ev.secretLabel": "Mark as sensitive (masked in the list)",
   "ev.encryptedWarning":
     "⚠️ This value is encrypted by dotenvx (encrypted: prefix). Editing it here will break the encrypted data — normally you should re-encrypt via the dotenvx CLI instead of editing the plaintext.",
-  "ev.encryptedOverrideLabel": "I understand the risk — overwrite it with plain text anyway",
-  "ev.encryptedBlockedError":
-    "This is a dotenvx-encrypted value — check the box above before saving, or leave it unchanged",
+  "ev.encryptedOverrideLabel": "Overwrite the encrypted value with plain text",
+  "ev.encryptedBlockedError": "Check the box above to overwrite this encrypted value",
   "ev.submitEdit": "Save Changes",
   "ev.submitCreate": "Create Variable",
 
@@ -1043,23 +1042,23 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "cf.suffixTitle": "Environment Name",
   "cf.suffixPlaceholder": "e.g. development, staging, development.local",
   "cf.suffixEmptyError": "Please enter an environment name",
-  "cf.suffixInvalidError": "Only letters, digits, underscores and hyphens are allowed; dots can separate segments",
+  "cf.suffixInvalidError": "Only letters, digits, _ and -; dots split segments",
   "cf.templateNameError":
     '{filename} is a template file and is not managed as an env file. Use "Generate/Update .env.example" instead',
   "cf.previewFilename": "Will create {filename}",
-  "cf.alreadyExistsError": "{filename} already exists — choose another name",
-  "cf.nameTakenByNonFile": "{filename} is taken by a folder, not a file — deal with that first",
+  "cf.alreadyExistsError": "{filename} already exists",
+  "cf.nameTakenByNonFile": "{filename} is a folder, not a file",
   "cf.submitTitle": "Create Env File",
   "cf.successToast": "Created {filename}",
   "cf.failToast": "Failed to Create Env File",
 
-  "st.searchPlaceholder": "Search by name or group; type export / alias / snippet to filter by kind...",
+  "st.searchPlaceholder": "Search name, group, or kind (export/alias)...",
   "st.loadFailedTitle": "Failed to Load Shell Config",
   "st.toggledToast": "Snippet state updated; takes effect in new terminals",
   "st.addedToast": "Snippet added; takes effect in new terminals",
   "st.updatedToast": "Snippet updated; takes effect in new terminals",
   "st.deletedToast": "Snippet deleted; takes effect in new terminals",
-  "st.movedToast": "Order updated (now {index} of {total}); takes effect in new terminals",
+  "st.movedToast": "Moved to {index} of {total}; applies to new terminals",
   "st.actionMoveUp": "Move Up (Earlier in shell.sh)",
   "st.actionMoveDown": "Move Down (Later in shell.sh)",
   "st.actionPreviewScript": "View Generated shell.sh",
@@ -1069,7 +1068,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.previewPathLabel": "File path",
   "st.previewStale":
     "⚠️ The file on disk doesn't match this preview — the last save may have failed, or the file was edited by hand",
-  "st.syntaxErrorHint": "The generated script has a syntax error in {shell} — nothing was written",
+  "st.syntaxErrorHint": "{shell} syntax error in the generated script; nothing written",
   "st.previewCopy": "Copy Whole File",
   "st.orderTooltip": "Position in the generated shell.sh",
   "st.actionConfigHistory": "View Shell Config History",
@@ -1081,9 +1080,9 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.secretTag": "Sensitive",
   "st.actionEnableGroup": "Enable Group “{group}”",
   "st.actionDisableGroup": "Disable Group “{group}”",
-  "st.groupEnabledToast": "Enabled all snippets in “{group}”; takes effect in new terminals",
-  "st.groupDisabledToast": "Disabled all snippets in “{group}”; takes effect in new terminals",
-  "st.groupRenamedToast": "Renamed group “{from}” to “{to}” and regenerated shell.sh",
+  "st.groupEnabledToast": "Group “{group}” enabled; applies to new terminals",
+  "st.groupDisabledToast": "Group “{group}” disabled; applies to new terminals",
+  "st.groupRenamedToast": "Renamed “{from}” to “{to}”; shell.sh regenerated",
   "st.groupDissolvedToast": "Dissolved group “{group}” and regenerated shell.sh",
   "st.detailGroup": "Group",
   "st.conflictVariable": "Variable {name}",
@@ -1091,8 +1090,8 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.conflictLine": "{what} is also set in “{others}”; “{effective}” wins (later in shell.sh)",
   "st.conflictLineOnly": "{what} is also set in “{others}”; this snippet wins (later in shell.sh)",
   "st.detailConflicts": "Duplicate Settings",
-  "st.conflictToast": "Note: {what} is also set in “{others}”; “{effective}” wins",
-  "es.containsSecretLabel": "This snippet contains sensitive information (masked by default)",
+  "st.conflictToast": "{what} is also set in “{others}”; “{effective}” wins",
+  "es.containsSecretLabel": "Contains secrets (masked by default)",
   "sch.searchPlaceholder": "Search Shell config history...",
   "sch.navTitle": "Shell Config History",
   "sch.sectionTitle": "Shell Config History",
@@ -1112,7 +1111,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "sch.restoreConfirmMessage":
     "Your current Shell config will be replaced entirely, and shell.sh will be regenerated.\n\nThe current config is saved first, so you can always switch back.",
   "sch.restoreConfirmAction": "Restore",
-  "sch.restoredToast": "Restored — open a new terminal window for it to take effect",
+  "sch.restoredToast": "Restored; applies to new terminals",
   "sch.restoreFailedTitle": "Restore Failed",
   "sch.loadFailedTitle": "Failed to Load Config History",
   "sch.deleteConfirmTitle": "Delete this history entry?",
@@ -1129,7 +1128,7 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "sch.focusEmptyDesc": "From the next edit on, every change to this snippet shows up here",
   "sch.focusAbsent": "This snippet did not exist in this version yet",
   "sch.focusUnchanged": "This snippet did not change",
-  "sch.focusActionRestore": "Restore Whole Config to This Version",
+  "sch.focusActionRestore": "Restore Whole Config",
   "sch.focusRestoreOnlyThis":
     "This restores the whole Shell config, not just “{name}”. In this version every other snippet matches what you have now, so only “{name}” changes. Open a new terminal window for it to take effect.",
   "sch.focusRestoreAlsoAffects":
@@ -1139,19 +1138,18 @@ Don't want to see this again? Use "Don't Show Again for This Project" below — 
   "st.bootstrapSection": "Shell Integration",
   "st.sectionSnippets": "Snippets",
   "st.bootstrapReadyTitle": "✅ Shell Integration Enabled",
-  "st.bootstrapReadySubtitle": "Found Env Keeper's line in {file}; changes take effect in new terminals",
-  "st.bootstrapPendingTitle": "One step left: enable Shell integration",
-  "st.bootstrapUnknownTitle": "Global Shell currently supports zsh and bash only",
+  "st.bootstrapReadySubtitle": "Line found in {file}; changes apply to new terminals",
+  "st.bootstrapPendingTitle": "Shell integration is off",
+  "st.bootstrapUnknownTitle": "Only zsh and bash are supported",
   "st.bootstrapLearnMore": "Learn More",
   "st.copySourceCommand": "Copy This Line",
-  "st.actionCopyRefresh": "Copy Refresh Command (Load Changes in Open Terminals)",
+  "st.actionCopyRefresh": "Copy Refresh Command",
   "st.refreshCopiedTitle": "Refresh command copied",
-  "st.refreshCopiedMessage":
-    "Paste it into an open terminal to pick up additions and edits; disabled or deleted items only go away in a new terminal",
+  "st.refreshCopiedMessage": "Paste into an open terminal; removals need a new one",
   "st.noSnippetsHint": "No snippets yet — press ⌘N to add one",
   "st.sectionHistoryPreview": "History & Preview",
   "st.sectionCopy": "Copy",
-  "st.unsupportedShellSubtitle": "Your login shell is {shell}; the generated script will not work there",
+  "st.unsupportedShellSubtitle": "Login shell is {shell}; the script won't run there",
   "st.unsupportedShellDetail": `# Global Shell currently supports zsh and bash only
 
 Your login shell was detected as \`{shell}\`.
@@ -1159,24 +1157,23 @@ Your login shell was detected as \`{shell}\`.
 The \`shell.sh\` Env Keeper generates uses zsh / bash syntax (\`export A=B\`, \`alias x=y\`) and cannot be loaded by other shells, so "Enable Shell Integration" and rc-file backups are not offered here.
 
 You can still manage and preview snippets; if you also use zsh or bash, source the generated file from that shell's config by hand.`,
-  "st.actionEnableIntegration": "Enable Shell Integration (Write to {file})",
+  "st.actionEnableIntegration": "Enable Shell Integration",
   "st.enableConfirmTitle": "Enable Shell integration?",
   "st.enableConfirmMessage":
     "Env Keeper will append this line to the end of {file}:\n\n{sourceLine}\n\nIt won't touch anything you already have there, and you can always use “Disable Shell Integration” to remove it. Write it now?",
   "st.enableConfirmAction": "Write",
-  "st.enabledIntegrationToast": "Shell integration enabled — open a new terminal window for it to take effect",
+  "st.enabledIntegrationToast": "Shell integration enabled; applies to new terminals",
   "st.enableFailedTitle": "Enable Failed",
-  "st.actionDisableIntegration": "Disable Shell Integration (Remove from {file})",
+  "st.actionDisableIntegration": "Disable Shell Integration",
   "st.disableConfirmTitle": "Disable Shell integration?",
   "st.disableConfirmMessage":
     "This removes the source line Env Keeper wrote to {file} (only that line; nothing else is touched). New terminal windows will stop loading the variables/aliases/snippets from your Global Shell (already-open windows are unaffected). Remove it?",
   "st.disableConfirmAction": "Remove",
-  "st.disabledIntegrationToast": "Removed from {file} — Shell integration disabled",
+  "st.disabledIntegrationToast": "Shell integration disabled; removed from {file}",
   "st.disableNotFoundTitle": "No Env Keeper line found in {file}",
-  "st.disableNotFoundMessage": "It may have been removed by hand, or Shell integration was never enabled",
-  "st.disableCustomLineTitle": "The source line in {file} is not in Env Keeper's format",
-  "st.disableCustomLineMessage":
-    "It may have been edited or wrapped in an if block. It was left untouched to avoid breaking your config; please remove it by hand",
+  "st.disableNotFoundMessage": "Removed by hand, or integration was never enabled",
+  "st.disableCustomLineTitle": "Line in {file} isn't in Env Keeper's format",
+  "st.disableCustomLineMessage": "Edited or wrapped in an if block; remove it by hand",
   "st.disableFailedTitle": "Disable Failed",
   "st.bootstrapDetailMarkdown": `# Why is this step needed?
 
@@ -1227,7 +1224,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "st.deleteConfirmTitle": "Delete snippet “{name}”?",
   "st.deleteConfirmMessage": "Are you sure you want to delete this snippet?",
   "st.enabledTag": "Active",
-  "st.enabledInactiveTag": "Enabled (not active until Shell integration is enabled)",
+  "st.enabledInactiveTag": "Enabled, waiting for integration",
   "st.disabledTag": "Disabled",
   "st.detailType": "Type",
   "st.detailStatus": "Status",
@@ -1256,7 +1253,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
     "⚠️ This doesn't start with alias. If it's not defining a command alias, consider switching to the \"Snippet\" type — just a hint, it won't block saving.",
   "es.descTitle": "Description (optional)",
   "es.descPlaceholder": "Briefly describe what this snippet does",
-  "es.enabledLabel": "Enable this snippet (included in ~/.env-keeper/shell.sh)",
+  "es.enabledLabel": "Enabled (included in shell.sh)",
   "es.submitTitle": "Save Snippet",
   "es.navCreate": "New Snippet",
   "es.navEdit": "Edit “{name}”",
@@ -1275,7 +1272,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "sh.cleanupKeepOption": "Keep the {count} most recent",
   "sh.cleanupKeepNone": "Delete all of them",
   "sh.cleanupPreview": "{total} in total — this deletes {count} of them",
-  "sh.cleanupNothing": "{total} in total — nothing to delete with this setting",
+  "sh.cleanupNothing": "{total} in total; nothing matches this setting",
   "sh.cleanupSubmit": "Delete",
   "sh.cleanupConfirmTitle": "Delete {count} {unit}?",
   "sh.cleanupUnit": "snapshots",
@@ -1303,7 +1300,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "sh.contentHeading": "Snapshot Content",
   "sh.contentEmpty": "(empty file)",
 
-  "jt.placeholder": "Type a project, env file, profile or shell snippet name...",
+  "jt.placeholder": "Project, env file, profile or snippet name...",
   "jt.sectionProjects": "Projects",
   "jt.sectionEnvFiles": "Env Files",
   "jt.sectionPresets": "Profiles",
@@ -1324,7 +1321,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
     "This finds projects, env files, profiles and shell snippets by name; use Search Env Vars for variables",
   "jt.loadFailedTitle": "Failed to Load",
   "jt.problemHint": "Open Global Shell to see how to fix it",
-  "search.placeholder": "Search variable names, values, or the project / snippet / group they belong to...",
+  "search.placeholder": "Search names, values, projects or groups...",
   "search.loadFailedTitle": "Failed to Load Variables",
   "search.sectionTitle": "In Env Files",
   "search.sectionShell": "Global Shell",
@@ -1380,7 +1377,7 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "rcb.actionBackupNow": "Back Up {file} Now",
   "rcb.sectionBackup": "Make Another Backup",
   "rcb.actionBackupTo": "Back Up to Another Location",
-  "rcb.actionRestore": "Overwrite {file} with This Backup",
+  "rcb.actionRestore": "Restore This Backup",
   "rcb.actionShowInFinder": "Show This Backup in Finder",
   "rcb.actionDelete": "Delete This Backup",
   "rcb.backupToNavTitle": "Back Up to Another Location",
@@ -1396,13 +1393,16 @@ Every time you open this view, Env Keeper checks whether {file} already contains
   "rcb.restoreConfirmMessage":
     "{file} will be replaced entirely by this backup. The current content is saved as another backup first, so this step is reversible too. Open a new terminal window for it to take effect.",
   "rcb.restoreConfirmAction": "Overwrite",
-  "rcb.restoredToast": "{file} restored — open a new terminal window for it to take effect",
+  "rcb.restoredToast": "{file} restored; applies to new terminals",
   "rcb.restoredSafetyNote": "The previous content was saved to {path}",
   "rcb.restoreFailedTitle": "Restore Failed",
   "rcb.deleteConfirmTitle": "Delete this backup?",
   "rcb.deleteConfirmMessage": "This cannot be undone: {filename}",
   "rcb.deletedToast": "Backup deleted",
 };
+
+/** 两份字典按语言导出,只给测试用(宽度校验);业务代码一律走 t() */
+export const dictionaries: Record<Lang, Record<DictKey, string>> = { zh, en };
 
 const dicts: Record<Lang, Record<DictKey, string>> = { zh, en };
 
